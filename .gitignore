@@ -1,0 +1,18 @@
+# IDE
+.vscode/
+
+# System files
+.DS_Store
+
+# Markdown files
+
+# Draw.io files
+*.drawio
+*.drawio.bkp
+
+# Specific backup files
+.$系统详细设计.drawio.bkp
+.$用例图.drawio.bkp
+
+# Ignore all files in md 画图 directory
+md 画图/

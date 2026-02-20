@@ -1,0 +1,35 @@
+.danmaku-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 400px;
+  overflow: hidden;
+}
+
+.danmaku-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.danmaku-item {
+  position: absolute;
+  white-space: nowrap;
+  color: #fff;
+  font-size: 18px;
+  font-weight: bold;
+  /* text-shadow: 0 0 2px rgba(0,0,0,0.8); */
+  padding: 4px 8px;
+  animation: moveRightToLeft linear forwards;
+}
+
+/* 从右到左的动画定义 */
+@keyframes moveRightToLeft {
+  0% {
+    transform: translateX(100vw); /* 从容器右侧外部进入 */
+  }
+  100% {
+    transform: translateX(-100%); /* 移动到自身完全离开容器左侧 */
+  }
+}
