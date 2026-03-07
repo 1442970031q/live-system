@@ -1,6 +1,6 @@
 // 创建直播页面
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useRef } from "react";
 import { authAPI, liveAPI } from "../services/api";
 import Danmaku from "./Danmaku";
@@ -216,6 +216,11 @@ const CreateStream = () => {
           <div className="create-stream-container-video-info">
             <div>标题: {formData.title}</div>
             <div>直播状态: {status}</div>
+            {streamId && (
+              <Link to={`/streamer/${streamId}`} className="streamer-console-link">
+                进入主播控制台（语音敏感词检测等）
+              </Link>
+            )}
           </div>
         )}
 

@@ -1,12 +1,13 @@
 // 首页
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { liveAPI } from '../services/api';
+import { liveAPI, authAPI } from '../services/api';
 
 const Home = () => {
   const [streams, setStreams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const currentUser = authAPI.getCurrentUser();
   
   useEffect(() => {
     const fetchStreams = async () => {
@@ -69,6 +70,9 @@ const Home = () => {
                   </div>
                 </div>
               </Link>
+              {currentUser && stream.user_id === currentUser.id && (
+                <Link to={`/streamer/${stream.id}`} className="stream-manage-link">管理直播</Link>
+              )}
             </div>
           ))}
         </div>

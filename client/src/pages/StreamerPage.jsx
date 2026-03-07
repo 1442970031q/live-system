@@ -1,7 +1,9 @@
-// 主播页面
-import React, { useState, useEffect } from 'react';
+// 主播页面（含直播时主播语音敏感词检测）
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { authAPI, liveAPI } from '../services/api';
+import { authAPI, liveAPI, voiceAPI } from '../services/api';
+
+const VOICE_CHUNK_MS = 8000; // 每 8 秒送检一段语音
 
 const StreamerPage = () => {
   const { streamId } = useParams();
@@ -9,9 +11,62 @@ const StreamerPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isEnding, setIsEnding] = useState(false);
+  const [voiceCheckOn, setVoiceCheckOn] = useState(false);
+  const [voiceCheckError, setVoiceCheckError] = useState('');
+  const [sensitivePopup, setSensitivePopup] = useState({ show: false, matchedWords: [] });
+  const mediaRecorderRef = useRef(null);
+  const streamRef = useRef(null);
   const navigate = useNavigate();
   const currentUser = authAPI.getCurrentUser();
-  
+
+  // 直播时主播语音敏感词检测：采集麦克风，按段送检
+  useEffect(() => {
+    if (!voiceCheckOn) return;
+
+    let mediaRecorder = null;
+    let stream = null;
+
+    const startVoiceCheck = async () => {
+      setVoiceCheckError('');
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
+        const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+
+        mediaRecorder.ondataavailable = async (e) => {
+          if (!e.data?.size) return;
+          try {
+            const result = await voiceAPI.checkAudio(e.data);
+            if (result.containsSensitive && result.matchedWords?.length) {
+              setSensitivePopup({ show: true, matchedWords: result.matchedWords });
+            }
+          } catch (err) {
+            if (err.matchedWords?.length) {
+              setSensitivePopup({ show: true, matchedWords: err.matchedWords });
+            } else {
+              setVoiceCheckError(err.message || '语音检测异常');
+            }
+          }
+        };
+
+        mediaRecorder.start(VOICE_CHUNK_MS);
+      } catch (err) {
+        setVoiceCheckError(err.message || '无法获取麦克风权限');
+        setVoiceCheckOn(false);
+      }
+    };
+
+    startVoiceCheck();
+    return () => {
+      if (mediaRecorder?.state !== 'inactive') mediaRecorder?.stop();
+      mediaRecorderRef.current = null;
+      stream?.getTracks?.().forEach((t) => t.stop());
+      streamRef.current = null;
+    };
+  }, [voiceCheckOn]);
+
   useEffect(() => {
     // 检查用户是否已登录
     if (!authAPI.isAuthenticated()) {
@@ -94,6 +149,37 @@ const StreamerPage = () => {
           <p>示例推流地址: rtmp://your-server-ip/live/{streamId}</p>
         </div>
       </div>
+
+      <div className="streamer-voice-check">
+        <h3>直播语音敏感词检测</h3>
+        <p className="streamer-voice-desc">开启后将对您麦克风说话内容进行实时检测，命中敏感词会弹窗提示。</p>
+        <button
+          type="button"
+          className={`voice-check-toggle ${voiceCheckOn ? 'on' : ''}`}
+          onClick={() => setVoiceCheckOn((v) => !v)}
+        >
+          {voiceCheckOn ? '已开启（点击关闭）' : '开启语音敏感词检测'}
+        </button>
+        {voiceCheckError && <p className="streamer-voice-error">{voiceCheckError}</p>}
+      </div>
+
+      {sensitivePopup.show && (
+        <div className="sensitive-popup-overlay" onClick={() => setSensitivePopup({ show: false, matchedWords: [] })}>
+          <div className="sensitive-popup" onClick={(e) => e.stopPropagation()}>
+            <div className="sensitive-popup-title">检测到敏感词</div>
+            <p className="sensitive-popup-desc">您刚才的发言中包含敏感词，请注意用语规范。</p>
+            <div className="sensitive-popup-words">
+              <span>命中词：</span>
+              {sensitivePopup.matchedWords.map((w) => (
+                <span key={w} className="sensitive-word-tag">{w}</span>
+              ))}
+            </div>
+            <button type="button" className="sensitive-popup-btn" onClick={() => setSensitivePopup({ show: false, matchedWords: [] })}>
+              知道了
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

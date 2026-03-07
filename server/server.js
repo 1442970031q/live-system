@@ -14,6 +14,7 @@ const authRoutes = require("./routes/auth");
 const liveRoutes = require("./routes/live");
 const commentRoutes = require("./routes/comment");
 const userRoutes = require("./routes/user");
+const voiceRoutes = require("./routes/voice");
 
 const app = express();
 const server = http.createServer(app);
@@ -58,6 +59,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/live", liveRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/voice", voiceRoutes);
 
 async function startServer() {
   try {

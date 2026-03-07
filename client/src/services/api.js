@@ -119,6 +119,38 @@ export const liveAPI = {
   }
 };
 
+// 违禁词/语音检测 API（文本检测用于直播弹幕，语音用于主播说话检测）
+export const voiceAPI = {
+  checkText: async (text) => {
+    const response = await fetch(`${API_URL}/voice/check-text`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text || "" }),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || "检测失败");
+    }
+    return response.json();
+  },
+  /** 上传音频进行语音转文字 + 敏感词检测，用于直播时主播说话检测。blob 为录音片段（如 webm）。 */
+  checkAudio: async (blob) => {
+    const form = new FormData();
+    form.append("audio", blob, "chunk.webm");
+    const response = await fetch(`${API_URL}/voice/check`, {
+      method: "POST",
+      body: form,
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      const e = new Error(err.error || "语音检测失败");
+      if (err.matchedWords) e.matchedWords = err.matchedWords;
+      throw e;
+    }
+    return response.json();
+  },
+};
+
 // 弹幕相关API
 export const commentAPI = {
   sendComment: async (streamId, content) => {
@@ -133,8 +165,10 @@ export const commentAPI = {
     });
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to send comment');
+      const body = await response.json();
+      const err = new Error(body.message || body.error || 'Failed to send comment');
+      if (Array.isArray(body.matchedWords)) err.matchedWords = body.matchedWords;
+      throw err;
     }
     
     return response.json();

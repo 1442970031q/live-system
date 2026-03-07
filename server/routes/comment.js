@@ -4,6 +4,7 @@ const router = express.Router();
 const db = require("../db");
 const { authenticateToken } = require("../middleware/auth");
 const { broadcastToStream } = require("../webSocketServer");
+const { checkSensitive } = require("../sensitiveWords");
 
 // 发送弹幕
 router.post("/:streamId", authenticateToken, async (req, res) => {
@@ -13,6 +14,14 @@ router.post("/:streamId", authenticateToken, async (req, res) => {
     const userId = req.user.id;
     if (isNaN(streamId) || streamId <= 0 || !content || typeof content !== "string") {
       return res.status(400).json({ message: "Invalid streamId or content" });
+    }
+    // 违禁词检测：命中则拒绝并返回命中的词，便于前端弹窗提示
+    const { containsSensitive, matchedWords } = checkSensitive(content);
+    if (containsSensitive && matchedWords.length) {
+      return res.status(400).json({
+        message: "内容含有违禁词，请修改后再发送",
+        matchedWords,
+      });
     }
     // 检查直播是否存在且正在直播
     const [streams] = await db.query(

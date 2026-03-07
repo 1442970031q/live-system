@@ -164,6 +164,7 @@ body {
 }
 
 .stream-card {
+  position: relative;
   background-color: white;
   border-radius: 8px;
   overflow: hidden;
@@ -178,6 +179,22 @@ body {
 .stream-card a {
   text-decoration: none;
   color: inherit;
+}
+.stream-manage-link {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  padding: 6px 12px;
+  background: #3498db;
+  color: #fff;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  text-decoration: none;
+  z-index: 2;
+}
+.stream-manage-link:hover {
+  background: #2980b9;
+  color: #fff;
 }
 
 .stream-thumbnail {
@@ -350,6 +367,58 @@ body {
   align-items: center;
   border-radius: 4px;
   margin-top: 10px;
+}
+
+.create-stream-container-video-info .streamer-console-link {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 8px 16px;
+  background: #3498db;
+  color: #fff;
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+.create-stream-container-video-info .streamer-console-link:hover {
+  background: #2980b9;
+  color: #fff;
+}
+
+.streamer-voice-check {
+  margin-top: 20px;
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+.streamer-voice-check h3 {
+  margin-bottom: 8px;
+}
+.streamer-voice-desc {
+  color: #666;
+  font-size: 0.95rem;
+  margin-bottom: 12px;
+}
+.voice-check-toggle {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid #3498db;
+  background: #fff;
+  color: #3498db;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.voice-check-toggle.on {
+  background: #3498db;
+  color: #fff;
+}
+.voice-check-toggle:hover {
+  opacity: 0.9;
+}
+.streamer-voice-error {
+  margin-top: 10px;
+  color: #e74c3c;
+  font-size: 0.9rem;
 }
 
 /* 观看直播页面样式 */
@@ -532,6 +601,63 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* 违禁词检测弹窗 */
+.sensitive-popup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.sensitive-popup {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 360px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+.sensitive-popup-title {
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: #c0392b;
+  margin-bottom: 12px;
+}
+.sensitive-popup-desc {
+  color: #555;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+.sensitive-popup-words {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.sensitive-word-tag {
+  background: #fadbd8;
+  color: #c0392b;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+.sensitive-popup-btn {
+  width: 100%;
+  padding: 10px 16px;
+  background: #c0392b;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.sensitive-popup-btn:hover {
+  background: #a93226;
 }
 
 /* 关注页面样式 */

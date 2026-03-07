@@ -5,6 +5,7 @@ import {
   authAPI,
   liveAPI,
   commentAPI,
+  voiceAPI,
   createCommentSocket,
   userAPI,
 } from "../services/api";
@@ -21,6 +22,7 @@ const WatchStream = () => {
   const [isFollowing, setIsFollowing] = useState(false);
   const [isLoadingFollow, setIsLoadingFollow] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [sensitivePopup, setSensitivePopup] = useState({ show: false, matchedWords: [] });
   const commentsEndRef = useRef(null);
   const socketRef = useRef(null);
   // 当前用户
@@ -125,7 +127,7 @@ const WatchStream = () => {
     }
   };
 
-  // 发送弹幕
+  // 发送弹幕（先做违禁词检测，命中则弹窗提示不发送）
   const handleSendComment = async (e) => {
     e.preventDefault();
 
@@ -137,14 +139,27 @@ const WatchStream = () => {
     if (!newComment.trim()) return;
 
     setSending(true);
+    setError("");
 
     try {
+      const check = await voiceAPI.checkText(newComment);
+      if (check.containsSensitive && check.matchedWords?.length) {
+        setSensitivePopup({ show: true, matchedWords: check.matchedWords });
+        setSending(false);
+        return;
+      }
+
       const comment = await commentAPI.sendComment(streamId, newComment);
-      // 通过WebSocket发送，由服务器广播，不需要自己添加到列表
       socketRef.current.sendComment(comment);
       setNewComment("");
     } catch (err) {
-      setError(err.message);
+      const msg = err.message || "";
+      const matched = err.matchedWords;
+      if (matched && matched.length) {
+        setSensitivePopup({ show: true, matchedWords: matched });
+      } else {
+        setError(msg);
+      }
     } finally {
       setSending(false);
     }
@@ -268,6 +283,25 @@ const WatchStream = () => {
           </div>
         )}
       </div>
+
+      {/* 违禁词检测弹窗 */}
+      {sensitivePopup.show && (
+        <div className="sensitive-popup-overlay" onClick={() => setSensitivePopup({ show: false, matchedWords: [] })}>
+          <div className="sensitive-popup" onClick={(e) => e.stopPropagation()}>
+            <div className="sensitive-popup-title">内容含有违禁词</div>
+            <p className="sensitive-popup-desc">您的弹幕包含违规内容，请修改后再发送。</p>
+            <div className="sensitive-popup-words">
+              <span>命中词：</span>
+              {sensitivePopup.matchedWords.map((w) => (
+                <span key={w} className="sensitive-word-tag">{w}</span>
+              ))}
+            </div>
+            <button type="button" className="sensitive-popup-btn" onClick={() => setSensitivePopup({ show: false, matchedWords: [] })}>
+              知道了
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

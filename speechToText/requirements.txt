@@ -1,0 +1,4 @@
+# 语音识别微服务（faster-whisper tiny 极速识别）
+faster-whisper>=1.0.0
+flask>=3.0.0
+flask-cors>=4.0.0
