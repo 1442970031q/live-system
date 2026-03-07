@@ -19,7 +19,18 @@ brew install python@3.11
 python3 --version   # 应为 3.10+
 ```
 
-## 第二步：创建虚拟环境并安装依赖
+## 第二步：安装 FFmpeg（用于解析浏览器 WebM/Opus 录音）
+
+浏览器上传的 `audio/webm` 会先经 FFmpeg 转成 PCM 再识别，避免出现 “Invalid data found when processing input” 报错。
+
+```bash
+# macOS
+brew install ffmpeg
+```
+
+未安装 FFmpeg 时，仅支持 WAV 等可直接解码的格式；WebM 会返回明确错误提示。
+
+## 第三步：创建虚拟环境并安装依赖
 
 在项目根目录下执行：
 
@@ -32,7 +43,7 @@ pip install -r requirements.txt
 
 首次运行时会自动下载 faster-whisper 的 `tiny` 模型（体积较小）。
 
-## 第三步：启动服务
+## 第四步：启动服务
 
 ```bash
 source venv/bin/activate
@@ -47,3 +58,12 @@ python app.py
 ## 与 Node 联调
 
 先启动本 Python 服务，再启动 Node 服务。Node 会请求 `http://localhost:5001/transcribe` 做语音识别，并在本地做敏感词检测。
+
+## 加速（可选）
+
+- **缩短检测延迟**：前端已限制最多发送约 24 秒音频，避免单次转写过长。
+- **使用 GPU 加速**：若有 NVIDIA GPU 与 CUDA，可设置环境变量后启动，转写会明显更快：
+  ```bash
+  export WHISPER_DEVICE=cuda
+  python app.py
+  ```

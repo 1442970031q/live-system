@@ -1,4 +1,6 @@
 # 语音识别微服务（faster-whisper tiny 极速识别）
+# WebM/Opus 等格式需 FFmpeg 预解码（系统需安装 ffmpeg，如 brew install ffmpeg）
 faster-whisper>=1.0.0
 flask>=3.0.0
 flask-cors>=4.0.0
+numpy>=1.20.0

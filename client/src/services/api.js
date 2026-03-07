@@ -3,6 +3,8 @@ const IP = '192.168.1.26:3001'
 const API_URL = `http://${IP}/api`;
 // websocket 
 const SOCKET_URL = `ws://${IP}/push/comments`;
+/** 主播推流用 WebSocket 地址 */
+export const getPushStreamWsUrl = (streamId) => `ws://${IP}/push/stream/${streamId}`;
 
 // 认证相关API
 export const authAPI = {
