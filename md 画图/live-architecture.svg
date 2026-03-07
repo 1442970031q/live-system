@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="100%" height="100%">
+  <!-- 样式定义 -->
+  <style>
+    .layer-box {
+      fill: none;
+      stroke: #333;
+      stroke-width: 2;
+      rx: 5;
+      ry: 5;
+    }
+    .component-box {
+      fill: #f0f7ff;
+      stroke: #3498db;
+      stroke-width: 1.5;
+      rx: 3;
+      ry: 3;
+    }
+    .streaming-box {
+      fill: #fff0f0;
+      stroke: #e74c3c;
+      stroke-width: 1.5;
+      rx: 3;
+      ry: 3;
+    }
+    .db-box {
+      fill: #f0fff0;
+      stroke: #2ecc71;
+      stroke-width: 1.5;
+      rx: 3;
+      ry: 3;
+    }
+    .text-title {
+      font-family: Arial, sans-serif;
+      font-size: 16px;
+      font-weight: bold;
+      text-anchor: middle;
+    }
+    .text-component {
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      text-anchor: middle;
+    }
+    .arrow {
+      stroke: #666;
+      stroke-width: 1.5;
+      fill: none;
+      marker-end: url(#arrowhead);
+    }
+  </style>
+  
+  <!-- 箭头标记定义 -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#666" />
+    </marker>
+  </defs>
+  
+  <!-- 顶层架构 -->
+  <rect x="50" y="50" width="250" height="450" class="layer-box" />
+  <text x="175" y="80" class="text-title">前端层 (React)</text>
+  
+  <rect x="350" y="50" width="350" height="450" class="layer-box" />
+  <text x="525" y="80" class="text-title">后端层 (Node.js/Express)</text>
+  
+  <rect x="750" y="50" width="150" height="450" class="layer-box" />
+  <text x="825" y="80" class="text-title">数据层 (MySQL)</text>
+  
+  <!-- 前端组件 -->
+  <rect x="70" y="110" width="210" height="100" class="component-box" />
+  <text x="175" y="140" class="text-title">页面组件</text>
+  <text x="175" y="165" class="text-component">登录/注册</text>
+  <text x="175" y="185" class="text-component">直播列表</text>
+  <text x="175" y="205" class="text-component">直播间</text>
+  <text x="175" y="225" class="text-component">个人中心</text>
+  
+  <rect x="70" y="240" width="210" height="80" class="component-box" />
+  <text x="175" y="270" class="text-title">通信模块</text>
+  <text x="175" y="295" class="text-component">HTTP请求</text>
+  <text x="175" y="315" class="text-component">WebSocket客户端</text>
+  
+  <rect x="70" y="350" width="210" height="80" class="component-box" />
+  <text x="175" y="380" class="text-title">媒体处理</text>
+  <text x="175" y="405" class="text-component">摄像头捕获</text>
+  <text x="175" y="425" class="text-component">RTMP推流客户端</text>
+  
+  <!-- 后端组件 -->
+  <rect x="370" y="110" width="150" height="120" class="component-box" />
+  <text x="445" y="140" class="text-title">路由层</text>
+  <text x="445" y="165" class="text-component">/api/auth</text>
+  <text x="445" y="185" class="text-component">/api/live</text>
+  <text x="445" y="205" class="text-component">/api/comment</text>
+  <text x="445" y="225" class="text-component">/api/user</text>
+  
+  <rect x="540" y="110" width="140" height="120" class="component-box" />
+  <text x="610" y="140" class="text-title">控制器层</text>
+  <text x="610" y="165" class="text-component">业务逻辑处理</text>
+  <text x="610" y="185" class="text-component">数据校验</text>
+  <text x="610" y="205" class="text-component">权限控制</text>
+  
+  <rect x="370" y="260" width="150" height="120" class="component-box" />
+  <text x="445" y="290" class="text-title">服务层</text>
+  <text x="445" y="315" class="text-component">认证服务</text>
+  <text x="445" y="335" class="text-component">直播服务</text>
+  <text x="445" y="355" class="text-component">弹幕服务</text>
+  <text x="445" y="375" class="text-component">关注服务</text>
+  
+  <rect x="540" y="260" width="140" height="120" class="component-box" />
+  <text x="610" y="290" class="text-title">数据访问层</text>
+  <text x="610" y="315" class="text-component">数据库操作</text>
+  <text x="610" y="335" class="text-component">SQL执行</text>
+  <text x="610" y="355" class="text-component">事务管理</text>
+  
+  <rect x="370" y="410" width="310" height="60" class="streaming-box" />
+  <text x="525" y="445" class="text-title">实时通信层 (WebSocket Server)</text>
+  
+  <rect x="450" y="390" width="150" height="20" class="streaming-box" />
+  <text x="525" y="405" class="text-component">流媒体服务器 (RTMP/HLS)</text>
+  
+  <!-- 数据层组件 -->
+  <rect x="770" y="110" width="110" height="60" class="db-box" />
+  <text x="825" y="135" class="text-title">用户表</text>
+  <text x="825" y="155" class="text-component">users</text>
+  
+  <rect x="770" y="190" width="110" height="60" class="db-box" />
+  <text x="825" y="215" class="text-title">直播表</text>
+  <text x="825" y="235" class="text-component">streams</text>
+  
+  <rect x="770" y="270" width="110" height="60" class="db-box" />
+  <text x="825" y="295" class="text-title">弹幕表</text>
+  <text x="825" y="315" class="text-component">comments</text>
+  
+  <rect x="770" y="350" width="110" height="60" class="db-box" />
+  <text x="825" y="375" class="text-title">关注表</text>
+  <text x="825" y="395" class="text-component">follows</text>
+  
+  <rect x="770" y="430" width="110" height="50" class="db-box" />
+  <text x="825" y="455" class="text-title">观看记录表</text>
+  <text x="825" y="475" class="text-component">stream_views</text>
+  
+  <!-- 连接线 -->
+  <!-- 前端到后端路由 -->
+  <line x1="300" y1="150" x2="350" y2="150" class="arrow" />
+  <line x1="300" y1="180" x2="350" y2="180" class="arrow" />
+  <line x1="300" y1="210" x2="350" y2="210" class="arrow" />
+  
+  <!-- 前端到WebSocket -->
+  <line x1="300" y1="300" x2="350" y2="440" class="arrow" />
+  
+  <!-- 前端到RTMP服务器 -->
+  <line x1="300" y1="400" x2="450" y2="400" class="arrow" />
+  
+  <!-- 路由到控制器 -->
+  <line x1="520" y1="150" x2="540" y2="150" class="arrow" />
+  <line x1="520" y1="180" x2="540" y2="180" class="arrow" />
+  
+  <!-- 控制器到服务 -->
+  <line x1="540" y1="220" x2="445" y2="260" class="arrow" />
+  
+  <!-- 服务到数据访问 -->
+  <line x1="520" y1="300" x2="540" y2="300" class="arrow" />
+  
+  <!-- 数据访问到数据库 -->
+  <line x1="680" y1="310" x2="750" y2="140" class="arrow" />
+  <line x1="680" y1="330" x2="750" y2="220" class="arrow" />
+  <line x1="680" y1="350" x2="750" y2="300" class="arrow" />
+  <line x1="680" y1="370" x2="750" y2="380" class="arrow" />
+  
+  <!-- WebSocket到弹幕服务 -->
+  <line x1="525" y1="410" x2="445" y2="370" class="arrow" />
+  
+  <!-- 流媒体服务器到服务层 -->
+  <line x1="525" y1="390" x2="445" y2="330" class="arrow" />
+</svg>
+    

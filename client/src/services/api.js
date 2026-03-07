@@ -1,8 +1,8 @@
-const IP = '192.168.1.26'
+const IP = '192.168.1.26:3001'
 // API服务
-const API_URL = `http://${IP}:3001/api`;
+const API_URL = `http://${IP}/api`;
 // websocket 
-const SOCKET_URL = `ws://${IP}:3001/push/comments`;
+const SOCKET_URL = `ws://${IP}/push/comments`;
 
 // 认证相关API
 export const authAPI = {

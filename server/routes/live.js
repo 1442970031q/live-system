@@ -3,31 +3,24 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 const { authenticateToken } = require("../middleware/auth");
-const { getIPAdress } = require("../tools");
-const IP = getIPAdress();
+const { getIPAddress } = require("../tools");
+const IP = getIPAddress();
 
 // 创建直播
 router.post("/create", authenticateToken, async (req, res) => {
   try {
     const { title, description } = req.body;
     const userId = req.user.id;
-    const [nowUserState = []] = await db.query(
-      "SELECT * FROM live_streams WHERE user_id = ?",
+    const [existingStreams] = await db.query(
+      "SELECT id FROM live_streams WHERE user_id = ?",
       [userId]
     );
-    console.log("nowUserState[0].is_live", nowUserState[0]?.is_live);
-    // if (nowUserState.length > 0 && nowUserState[0].is_live) {
-    //   return res
-    //     .status(400)
-    //     .json({ code: 400, message: "User is already live" });
-    // }
-    if (nowUserState.length > 0) {
+    if (existingStreams.length > 0) {
+      const streamId = existingStreams[0].id;
       await db.query(
         "UPDATE live_streams SET is_live = ?, title = ?, description = ?, started_at = NOW() WHERE user_id = ?",
         [true, title, description, userId]
       );
-      const streamId = nowUserState[0].id;
-      console.log("streamId", nowUserState[0], streamId);
       return res.status(200).json({
         code: 200,
         message: "Live stream updated successfully",
@@ -40,15 +33,11 @@ router.post("/create", authenticateToken, async (req, res) => {
       "INSERT INTO live_streams (user_id, title, description, is_live, started_at) VALUES (?, ?, ?, ?, NOW())",
       [userId, title, description, true]
     );
-    const [liveStreams] = await db.query(
-      "SELECT * FROM live_streams WHERE user_id = ?",
-      [userId]
-    );
-    const streamId = liveStreams[0].id;
+    const streamId = result.insertId;
     res.status(200).json({
       code: 200,
       message: "Live stream created successfully",
-      streamId: result.insertId,
+      streamId,
       isLive: true,
       wsUrl: `ws://${IP}:3001/push/stream/${streamId}`,
     });

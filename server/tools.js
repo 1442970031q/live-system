@@ -1,18 +1,18 @@
 const db = require("./db");
 
 
-//获取本机ip地址
-function getIPAdress() {
-  var interfaces = require('os').networkInterfaces();
-  for (var devName in interfaces) {
-    var iface = interfaces[devName];
-    for (var i = 0; i < iface.length; i++) {
-      var alias = iface[i];
-      if (alias.family === 'IPv4' && alias.address !== '127.0.0.1' && !alias.internal) {
-        return alias.address;
+const os = require("os");
+
+function getIPAddress() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === "IPv4" && iface.address !== "127.0.0.1" && !iface.internal) {
+        return iface.address;
       }
     }
   }
+  return "127.0.0.1";
 }
 
 const closeLiveStream = async (streamId) => {
@@ -22,6 +22,6 @@ const closeLiveStream = async (streamId) => {
   );
 }
 module.exports = {
-    getIPAdress,
-    closeLiveStream
-}
+  getIPAddress,
+  closeLiveStream,
+};

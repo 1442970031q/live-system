@@ -62,7 +62,7 @@ router.post('/login', async (req, res) => {
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Invalid username or password' });
     }
-    console.log('===========',user)
+
     // 生成JWT
     const token = jwt.sign(
       { id: user.id, username: user.username },

@@ -1,4 +1,5 @@
 // 数据库连接
+// mysql 地址 https://sqlpub.com/dashboard/userDb
 const mysql = require('mysql2/promise');
 const config = require('./config');
 

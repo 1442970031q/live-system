@@ -68,7 +68,6 @@ router.post('/unfollow/:userId', authenticateToken, async (req, res) => {
 router.get('/follows', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log('userId', userId)
     const [follows] = await db.query(`
       SELECT u.id, u.username, u.avatar 
       FROM follows f

@@ -1,3 +1,6 @@
+// mysql 地址 https://sqlpub.com/dashboard/userDb
+
+
 ┌─────────────────┐      ┌────────────────────────────────────┐      ┌─────────────────┐
 │   前端层         │      │            后端层                   │      │   数据层         │
 │  （React）       │      │        （Node.js/Express）         │      │  （MySQL）       │ 
