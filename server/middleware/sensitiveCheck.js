@@ -82,6 +82,13 @@ function sensitiveCheck(options = {}) {
     }
 
     if (strategy === 'reject') {
+      // 一级敏感词：将主播/用户加入黑名单，解除前无法开播
+      if (highestLevel === 1 && userId) {
+        const reason = `一级违禁词：${firstMatch?.word || '违规'}（${scene}）`;
+        await sensitiveService.addToBlacklist(userId, reason).catch((err) =>
+          console.error('[sensitiveCheck] addToBlacklist error:', err)
+        );
+      }
       return res.status(400).json({
         message: '内容含有违禁词，请修改后再提交',
         matchedWords: matchedWords.map((m) => m.word),

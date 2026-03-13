@@ -5,6 +5,7 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
+const db = require("../db");
 const { transcribe } = require("../services/speechService");
 const sensitiveService = require("../services/sensitiveService");
 const config = require("../config");
@@ -103,12 +104,28 @@ router.post("/check", uploadAudio, async (req, res) => {
     const { hit, highestLevel, matchedWords } = result;
     const handleStrategy = sensitiveService.getHandleStrategy(highestLevel);
 
+    // 获取主播 userId：从 streamId 查 live_streams（主播语音检测场景）
+    let streamerUserId = null;
+    const streamId = req.body?.streamId ? parseInt(req.body.streamId, 10) : null;
+    if (streamId && !isNaN(streamId)) {
+      const [rows] = await db.query("SELECT user_id FROM live_streams WHERE id = ? AND is_live = 1", [streamId]);
+      if (rows.length > 0) streamerUserId = rows[0].user_id;
+    }
+
+    // 命中一级违禁词：将主播加入黑名单
+    if (hit && highestLevel === 1 && streamerUserId) {
+      const reason = `一级违禁词：${matchedWords[0]?.word || "违规"}（voice）`;
+      await sensitiveService.addToBlacklist(streamerUserId, reason).catch((err) =>
+        console.error("[Voice] addToBlacklist error:", err)
+      );
+    }
+
     // 可选：命中一级违禁词时记录日志（无 userId/streamId 时仅检测不写库）
     let hitLogId = null;
     if (hit && matchedWords[0]) {
       hitLogId = await sensitiveService.logHit({
-        userId: null,
-        streamId: null,
+        userId: streamerUserId,
+        streamId: streamId || null,
         sensitiveWordId: matchedWords[0].wordId || 0,
         originalContent: text,
         matchedWord: matchedWords[0].word,

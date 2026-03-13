@@ -208,6 +208,7 @@ const StreamerPage = () => {
             const result = await voiceAPI.checkAudio(blob, {
               signal: voiceAbortRef.current.signal,
               timeoutMs: 25000,
+              streamId,
             });
             if (!voiceCheckActiveRef.current) return; // 推出直播间后忽略检测结果
             const fullText = (result.text || "").trim();

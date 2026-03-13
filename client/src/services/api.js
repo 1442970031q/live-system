@@ -135,11 +135,12 @@ export const voiceAPI = {
     }
     return response.json();
   },
-  /** 上传音频进行语音转文字 + 敏感词检测。blob 为录音片段。支持 signal 取消与超时。 */
+  /** 上传音频进行语音转文字 + 敏感词检测。blob 为录音片段。支持 signal 取消与超时。streamId 主播直播间ID，用于一级命中时加入黑名单。 */
   checkAudio: async (blob, options = {}) => {
-    const { signal, timeoutMs = 25000 } = options;
+    const { signal, timeoutMs = 25000, streamId } = options;
     const form = new FormData();
     form.append("audio", blob, "chunk.webm");
+    if (streamId != null) form.append("streamId", String(streamId));
     const ctrl = new AbortController();
     const timeoutId = timeoutMs > 0 ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
     if (signal?.aborted) {

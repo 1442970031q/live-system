@@ -116,6 +116,26 @@ async function isWhitelisted(userId) {
 }
 
 /**
+ * 将用户加入黑名单（一级敏感词触发时调用）
+ * @param {number} userId 用户ID
+ * @param {string} [reason] 原因，如「一级违禁词：xxx」
+ */
+async function addToBlacklist(userId, reason = '一级违禁词触发') {
+  if (!userId) return;
+  try {
+    await db.query(
+      `INSERT INTO user_black_white_list (user_id, list_type, reason)
+       VALUES (?, 'black', ?)
+       ON DUPLICATE KEY UPDATE reason = VALUES(reason), expire_at = NULL`,
+      [userId, reason]
+    );
+    console.log('[SensitiveService] User', userId, 'added to blacklist:', reason);
+  } catch (err) {
+    console.error('[SensitiveService] Add to blacklist error:', err);
+  }
+}
+
+/**
  * 根据最高等级返回处理策略
  * 1-2: reject, 3: replace, 4: log
  */
@@ -130,6 +150,7 @@ module.exports = {
   hotReload,
   check,
   logHit,
+  addToBlacklist,
   isBlacklisted,
   isWhitelisted,
   getHandleStrategy,
