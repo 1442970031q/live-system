@@ -10,17 +10,14 @@ const commentClients = new Map();
 
 const webMediaPush = ({ ws, streamId }) => {
   const ffmpeg = spawn(nmsConfig.trans.ffmpeg, [
-    "-f",
-    "webm",
-    "-i",
-    "-",
-    "-vcodec",
-    "libx264", // 转码视频为H.264
-    "-acodec",
-    "aac", // 转码音频为AAC
-    "-f",
-    "flv",
-    // `${RTMP_STREAM_BASE_URL}mystream`
+    "-fflags", "nobuffer", "-flags", "low_delay", // 减少输入缓冲
+    "-f", "webm", "-i", "-",
+    "-vcodec", "libx264",
+    "-preset", "ultrafast", // 极快编码，降低编码延迟
+    "-tune", "zerolatency", // 零延迟调优
+    "-acodec", "aac",
+    "-max_delay", "0", // 最小化输出延迟
+    "-f", "flv",
     `${RTMP_STREAM_BASE_URL}${streamId}`,
   ]);
   ffmpeg.on("exit", (code, signal) => {

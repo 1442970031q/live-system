@@ -8,12 +8,14 @@ const FlvPlayer = ({
   autoplay = false,
   muted = true,
   lowLatency = true, // 低延迟模式开关
-  onError = (err) => console.error("FLV播放错误:", err),
+  onError,
 }) => {
   // 核心引用
   const videoRef = useRef(null);
   const playerRef = useRef(null); // mpegts播放器实例
   const mediaSourceRef = useRef(null); // 媒体源引用
+  const onErrorRef = useRef(() => {});
+  onErrorRef.current = onError || ((err) => console.error("FLV播放错误:", err));
 
   // 状态管理
   const [isLoading, setIsLoading] = useState(true);
@@ -21,6 +23,7 @@ const FlvPlayer = ({
   const [error, setError] = useState(null);
   const [bufferProgress, setBufferProgress] = useState(0);
   const [volume, setVolume] = useState(0.7); // 默认音量
+  const [estimatedDelay, setEstimatedDelay] = useState(null); // 预计延迟（秒）
 
   // 初始化播放器
   const initPlayer = useCallback(() => {
@@ -38,12 +41,13 @@ const FlvPlayer = ({
     if (!mpegts.isSupported()) {
       const err = new Error("当前浏览器不支持mpegts.js（推荐Chrome 80+）");
       setError(err);
-      onError(err);
+      onErrorRef.current(err);
       return;
     }
 
     setIsLoading(true);
     setError(null);
+    setEstimatedDelay(null);
 
     try {
       // 配置媒体源
@@ -62,11 +66,17 @@ const FlvPlayer = ({
         }),
       };
 
-      // 播放器配置
+      // 播放器配置 - 低延迟优化（避免过激参数导致闪屏/卡顿）
       const config = {
-        enableWorker: true, // 启用WebWorker解析（避免主线程阻塞）
-        enableStashBuffer: !lowLatency, // 低延迟模式关闭缓冲池
-        stashInitialSize: 1024 * 1024, // 初始缓冲区大小(1MB)
+        isLive: true,
+        enableWorker: true,
+        enableStashBuffer: !lowLatency,
+        stashInitialSize: lowLatency ? 384 * 1024 : 1024 * 1024, // 384KB 兼顾延迟与稳定
+        // 延迟追赶：适度开启，参数放宽避免频繁 seek 导致闪屏
+        liveBufferLatencyChasing: lowLatency,
+        liveBufferLatencyMaxLatency: 2.0, // 放宽到 2 秒，减少激进追赶
+        liveBufferLatencyMinRemain: 0.5,
+        autoCleanupSourceBuffer: true,
         // 时间戳容错
         maxDrift: 1000,
         fixAudioTimestampGap: true,
@@ -138,7 +148,7 @@ const FlvPlayer = ({
         }
         
         setError(err);
-        onError(err);
+        onErrorRef.current(err);
         setIsLoading(false);
       });
 
@@ -151,10 +161,10 @@ const FlvPlayer = ({
 
     } catch (err) {
       setError(err);
-      onError(err);
+      onErrorRef.current(err);
       setIsLoading(false);
     }
-  }, [url, autoplay, lowLatency, onError]);
+  }, [url, autoplay, lowLatency]);
 
   // 组件挂载/参数变化时初始化
   useEffect(() => {
@@ -169,19 +179,42 @@ const FlvPlayer = ({
     };
   }, [url, initPlayer]);
 
-  // 播放/暂停切换
+  // 预计延迟计算：基于视频缓冲估算（buffered.end - currentTime ≈ 距直播实时的延迟）
+  useEffect(() => {
+    if (!videoRef.current) return;
+    const updateDelay = () => {
+      const video = videoRef.current;
+      if (!video || !playerRef.current) return;
+      try {
+        const buffered = video.buffered;
+        if (buffered.length > 0) {
+          const end = buffered.end(buffered.length - 1);
+          const delay = Math.max(0, end - video.currentTime);
+          setEstimatedDelay(Math.round(delay * 10) / 10); // 保留1位小数
+        }
+      } catch (_) {}
+    };
+    updateDelay(); // 立即执行一次
+    const timer = setInterval(updateDelay, 500); // 每500ms更新
+    return () => clearInterval(timer);
+  }, [isPlaying]);
+
+  // 播放/暂停切换（点击时立即更新 UI，不依赖 PLAYING 事件）
   const togglePlay = useCallback(() => {
     if (!playerRef.current) return;
     if (isPlaying) {
       playerRef.current.pause();
+      setIsPlaying(false);
     } else {
       playerRef.current.play().catch(err => {
         const playErr = new Error(`播放失败: ${err.message}（请检查浏览器自动播放策略）`);
         setError(playErr);
-        onError(playErr);
+        onErrorRef.current(playErr);
+        setIsPlaying(false);
       });
+      setIsPlaying(true); // 立即更新按钮状态
     }
-  }, [isPlaying, onError]);
+  }, [isPlaying]);
 
   // 静音切换
   const toggleMute = useCallback(() => {
@@ -366,6 +399,18 @@ const FlvPlayer = ({
         }}>
           直播
         </span>
+
+        {/* 预计延迟显示 */}
+        {estimatedDelay != null && (
+          <span style={{
+            fontSize: "10px",
+            padding: "2px 6px",
+            backgroundColor: "rgba(0, 0, 0, 0.6)",
+            borderRadius: "4px",
+          }}>
+            延迟约 {estimatedDelay}s
+          </span>
+        )}
 
         {/* 低延迟模式标签 */}
         {lowLatency && (

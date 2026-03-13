@@ -3,7 +3,7 @@ const NodeMediaServer = require("node-media-server");
 const nmsConfig = {
   rtmp: {
     port: 1935,
-    chunk_size: 60000,
+    chunk_size: 16384, // 适度减小分块（4096 过小易导致闪屏，60000 延迟偏高）
     gop_cache: true, // 保留GOP缓存（确保首帧快速加载）
     ping: 60, // 心跳检测间隔（避免误判连接超时）
     ping_timeout: 120, // 超时时间延长到120秒（适配直播流）

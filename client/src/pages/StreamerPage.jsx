@@ -1,7 +1,7 @@
 // 主播页：直播视频预览、弹幕、主播语音敏感词检测
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { authAPI, liveAPI, voiceAPI, getPushStreamWsUrl } from "../services/api";
+import { authAPI, liveAPI, voiceAPI, commentAPI, createCommentSocket, getPushStreamWsUrl } from "../services/api";
 import Danmaku from "./Danmaku";
 
 // 语音片段时长：5 秒
@@ -43,6 +43,7 @@ const StreamerPage = () => {
   const [level3Toast, setLevel3Toast] = useState(false);
   // 四级预警词：右下角蓝色通知（2秒消失）
   const [level4Toast, setLevel4Toast] = useState(false);
+  const [commentList, setCommentList] = useState([]);
 
   const pushStreamRef = useRef(null);
   const pushRecorderRef = useRef(null);
@@ -166,6 +167,27 @@ const StreamerPage = () => {
       if (videoRef.current) videoRef.current.srcObject = null;
     };
   }, [stream?.id, streamId]);
+
+  // 历史弹幕：初始拉取 + WebSocket 实时
+  useEffect(() => {
+    if (!streamId) return;
+    const fetchComments = async () => {
+      try {
+        const data = await commentAPI.getComments(streamId);
+        setCommentList(data);
+      } catch (err) {
+        console.error("Fetch comments error:", err);
+      }
+    };
+    fetchComments();
+    const { close } = createCommentSocket(streamId, (comment) => {
+      setCommentList((prev) => {
+        if (prev.some((c) => c.id === comment.id)) return prev;
+        return [...prev, comment];
+      });
+    });
+    return () => close();
+  }, [streamId]);
 
   // 主播语音敏感词检测（独立麦克风）；推出直播间后不再检查
   useEffect(() => {
@@ -330,12 +352,28 @@ const StreamerPage = () => {
     }
   };
 
-  if (loading) return <div className="loading">加载中...</div>;
-  if (error) return <div className="error-message">{error}</div>;
-  if (!stream) return <div className="error-message">直播不存在</div>;
+  if (loading) {
+    return (
+      <div className="streamer-container streamer-loading">
+        <div className="streamer-loading-spinner" />
+        <p className="streamer-loading-text">加载中...</p>
+      </div>
+    );
+  }
+  if (error || !stream) {
+    return (
+      <div className="streamer-container streamer-error">
+        <p className="streamer-error-text">{error || "直播不存在"}</p>
+        <button className="streamer-back-btn" onClick={() => navigate("/")}>
+          返回首页
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="streamer-container">
+      {/* 顶部悬浮栏 */}
       <div className="streamer-header">
         <h1>你的直播</h1>
         <button
@@ -347,40 +385,57 @@ const StreamerPage = () => {
         </button>
       </div>
 
-      <div className="streamer-info">
-        <h2>{stream.title}</h2>
-        <p>{stream.description}</p>
-        <p>直播ID: {stream.id}</p>
-        <p>开始时间: {new Date(stream.started_at).toLocaleString()}</p>
-        <p className="streamer-push-status">{pushStatus}</p>
-      </div>
-
-      <div className="streamer-preview">
-        <h3>直播预览</h3>
-        <div className="streamer-keyword-banner">
-          已开启关键词检测
-        </div>
-        <div className="streamer-preview-inner">
-          <div className="streamer-video-wrap">
-            <video
-              ref={videoRef}
-              autoPlay
-              muted
-              playsInline
-              className="streamer-preview-video"
-            />
-            {streamId && <Danmaku streamId={streamId} />}
+      {/* 主内容区：视频 + 右侧历史弹幕 */}
+      <div className="streamer-main">
+        <div className="streamer-preview">
+          <div className="streamer-preview-inner">
+            <div className="streamer-video-wrap">
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                playsInline
+                className="streamer-preview-video"
+              />
+              {streamId && <Danmaku streamId={streamId} />}
+              <div className="streamer-keyword-banner">已开启关键词检测</div>
+            </div>
           </div>
         </div>
+
+        {/* 右侧历史弹幕 */}
+        <aside className="streamer-comment-sidebar">
+          <h3 className="streamer-comment-title">历史弹幕</h3>
+          <div className="streamer-comment-list">
+            {commentList.length === 0 ? (
+              <p className="streamer-comment-empty">暂无弹幕</p>
+            ) : (
+              [...commentList].reverse().map((c) => (
+                <div key={c.id} className="streamer-comment-item">
+                  <span className="streamer-comment-user">{c.username}</span>
+                  <span className="streamer-comment-content">{c.content}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </aside>
       </div>
 
-      <div className="streamer-voice-check streamer-voice-check-always">
-        <p className="streamer-voice-desc">
-          正在对您麦克风说话内容进行实时关键词检测，命中敏感词将弹窗提示并可结束直播。
-        </p>
-        {voiceCheckError && (
-          <p className="streamer-voice-error">{voiceCheckError}</p>
-        )}
+      {/* 底部状态栏 */}
+      <div className="streamer-info">
+        <div className="streamer-info-left">
+          <div className="streamer-info-main">
+            <h2>{stream.title}</h2>
+            <p className="streamer-info-meta">
+              ID {stream.id} · {new Date(stream.started_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+            </p>
+          </div>
+          <p className="streamer-voice-desc">麦克风实时敏感词检测中</p>
+          {voiceCheckError && (
+            <p className="streamer-voice-error">{voiceCheckError}</p>
+          )}
+        </div>
+        <p className="streamer-push-status">{pushStatus}</p>
       </div>
 
       {/* 一级违禁词：全屏半透明黑色背景红色强警告弹窗，不可关闭，需点击按钮 */}

@@ -1,6 +1,6 @@
 // 主应用组件
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -11,12 +11,14 @@ import StreamerPage from './pages/StreamerPage';
 import Follows from './pages/Follows';
 import './styles/App.css';
 
-const App = () => {
+const AppContent = () => {
+  const location = useLocation();
+  const isStreamerPage = location.pathname.startsWith('/streamer/');
+
   return (
-    <Router>
-      <div className="app-container">
-        <Navbar />
-        <main className="main-content">
+    <div className={`app-container ${isStreamerPage ? 'app-streamer-mode' : ''}`}>
+      <Navbar />
+      <main className="main-content">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
@@ -28,8 +30,13 @@ const App = () => {
           </Routes>
         </main>
       </div>
-    </Router>
   );
 };
+
+const App = () => (
+  <Router>
+    <AppContent />
+  </Router>
+);
 
 export default App;
