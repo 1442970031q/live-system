@@ -8,13 +8,34 @@
 }
 
 .create-stream-container-info {
-  background: rgba(255, 255, 255, 0.95);
+  background: #fff;
   width: 500px;
   max-width: 90%;
-  border-radius: 8px;
+  border-radius: 16px;
   padding: 24px;
   margin: 40px auto 0;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 24px rgba(37, 99, 235, 0.08);
+}
+
+.create-stream-container-info h2 {
+  color: #1e293b;
+}
+
+.create-stream-container-info .form-group label {
+  color: #475569;
+}
+
+.create-stream-container-info .form-group input,
+.create-stream-container-info .form-group textarea {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+.create-stream-container-info .form-group input::placeholder,
+.create-stream-container-info .form-group textarea::placeholder {
+  color: #94a3b8;
 }
 
 .create-stream-only-form.create-stream-container-info {

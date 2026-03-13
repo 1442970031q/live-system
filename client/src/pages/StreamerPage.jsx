@@ -4,9 +4,12 @@ import { useParams, useNavigate } from "react-router-dom";
 import { authAPI, liveAPI, voiceAPI, getPushStreamWsUrl } from "../services/api";
 import Danmaku from "./Danmaku";
 
-const VOICE_CHUNK_MS = 8000;
-// 过小的片段多为不完整 WebM，不上传（与后端 MIN_WEBM_BYTES 一致）
+// 语音片段时长：5 秒
+const VOICE_CHUNK_MS = 5000;
+// 过小的片段多为不完整 WebM，不上传（需 ≥32KB，与后端一致）
 const VOICE_MIN_BYTES = 32 * 1024;
+// 两次检测最少间隔，与片段时长一致
+const MIN_CHECK_INTERVAL_MS = 5000;
 
 function getSupportedMimeType() {
   const types = [
@@ -32,7 +35,14 @@ const StreamerPage = () => {
   const [pushConnected, setPushConnected] = useState(false);
   const [voiceCheckOn] = useState(true);
   const [voiceCheckError, setVoiceCheckError] = useState("");
-  const [sensitivePopup, setSensitivePopup] = useState({ show: false, matchedWords: [], segment: "" });
+  // 一级违禁词：全屏强警告弹窗（不可关闭，需点击按钮）
+  const [level1Popup, setLevel1Popup] = useState({ show: false, matchedWords: [], segment: "" });
+  // 二级违规词：顶部橙色浮动条（5秒消失）
+  const [level2Toast, setLevel2Toast] = useState(false);
+  // 三级违规词：右下角黄色通知（3秒消失）
+  const [level3Toast, setLevel3Toast] = useState(false);
+  // 四级预警词：右下角蓝色通知（2秒消失）
+  const [level4Toast, setLevel4Toast] = useState(false);
 
   const pushStreamRef = useRef(null);
   const pushRecorderRef = useRef(null);
@@ -42,6 +52,11 @@ const StreamerPage = () => {
   const voiceStreamRef = useRef(null);
   const voiceChunksRef = useRef([]);
   const voicePrevTextRef = useRef("");
+  const voiceLastCheckTimeRef = useRef(0);
+  const voiceCheckingRef = useRef(false);
+  const level1TriggerCountRef = useRef(0);
+  const voiceCheckActiveRef = useRef(true); // 推出直播间后置 false，不再处理检测结果
+  const voiceAbortRef = useRef(null); // 用于取消进行中的语音检测请求
 
   const navigate = useNavigate();
   const currentUser = authAPI.getCurrentUser();
@@ -152,9 +167,10 @@ const StreamerPage = () => {
     };
   }, [stream?.id, streamId]);
 
-  // 主播语音敏感词检测（独立麦克风）
+  // 主播语音敏感词检测（独立麦克风）；推出直播间后不再检查
   useEffect(() => {
     if (!voiceCheckOn) return;
+    voiceCheckActiveRef.current = true;
     let recorder = null;
     let audioStream = null;
 
@@ -174,12 +190,26 @@ const StreamerPage = () => {
         recorder.ondataavailable = async (e) => {
           if (!e.data?.size) return;
           if (e.data.type && !e.data.type.toLowerCase().includes("audio")) return;
+          if (!voiceCheckActiveRef.current) return; // 已推出直播间，不再检查
           voiceChunksRef.current.push(e.data);
           const chunks = voiceChunksRef.current;
           const blob = chunks.length === 1 ? chunks[0] : new Blob(chunks, { type: chunks[0].type || "audio/webm" });
           if (blob.size < VOICE_MIN_BYTES) return;
+          if (!voiceCheckActiveRef.current) return;
+          // 节流：距上次检测不足间隔则跳过
+          const now = Date.now();
+          if (now - voiceLastCheckTimeRef.current < MIN_CHECK_INTERVAL_MS) return;
+          // 串行：已有请求进行中则跳过，避免堆积
+          if (voiceCheckingRef.current) return;
+          voiceCheckingRef.current = true;
+          voiceLastCheckTimeRef.current = now;
+          voiceAbortRef.current = new AbortController();
           try {
-            const result = await voiceAPI.checkAudio(blob);
+            const result = await voiceAPI.checkAudio(blob, {
+              signal: voiceAbortRef.current.signal,
+              timeoutMs: 25000,
+            });
+            if (!voiceCheckActiveRef.current) return; // 推出直播间后忽略检测结果
             const fullText = (result.text || "").trim();
             const prevText = voicePrevTextRef.current || "";
             voicePrevTextRef.current = fullText;
@@ -193,18 +223,69 @@ const StreamerPage = () => {
               }
               newText = fullText.slice(len).trim();
             }
-            if (!newText) return;
-            const fullMatched = result.matchedWords || [];
-            const matchedInNew = fullMatched.filter((w) => newText.includes(w));
-            if (matchedInNew.length > 0) {
-              setSensitivePopup({ show: true, matchedWords: matchedInNew, segment: newText });
+            if (!newText) {
+              // 必须保留首帧（WebM init 段），否则后续 blob 格式无效
+              voiceChunksRef.current = chunks.length > 0
+                ? (chunks.length >= 2 ? [chunks[0], ...chunks.slice(-2)] : chunks)
+                : [];
+              return;
             }
+            const fullMatched = result.matchedWords || [];
+            const hit = result.containsSensitive && fullMatched.length > 0;
+            if (hit) {
+              const level = result.highestLevel || 1;
+              if (level === 1) {
+                level1TriggerCountRef.current += 1;
+                if (level1TriggerCountRef.current >= 2) {
+                  setIsEnding(true);
+                  try {
+                    await liveAPI.endStream(streamId);
+                    navigate("/");
+                  } catch (e) {
+                    setIsEnding(false);
+                  }
+                  return;
+                }
+                setLevel1Popup({ show: true, matchedWords: fullMatched, segment: newText });
+              } else if (level === 2) {
+                setLevel2Toast(true);
+                setTimeout(() => setLevel2Toast(false), 5000);
+              } else if (level === 3) {
+                setLevel3Toast(true);
+                setTimeout(() => setLevel3Toast(false), 3000);
+              } else if (level === 4) {
+                setLevel4Toast(true);
+                setTimeout(() => setLevel4Toast(false), 2000);
+              }
+            }
+            // 必须保留首帧（WebM init 段），否则后续 blob 格式无效
+            voiceChunksRef.current = chunks.length > 0
+              ? (chunks.length >= 2 ? [chunks[0], ...chunks.slice(-2)] : chunks)
+              : [];
           } catch (err) {
+            if (!voiceCheckActiveRef.current) return;
+            if (err.name === "AbortError") return; // 已取消，不提示
             if (err.matchedWords?.length) {
-              setSensitivePopup({ show: true, matchedWords: err.matchedWords, segment: "" });
+              level1TriggerCountRef.current += 1;
+              setLevel1Popup({ show: true, matchedWords: err.matchedWords, segment: "" });
+              if (level1TriggerCountRef.current >= 2) {
+                setIsEnding(true);
+                try {
+                  await liveAPI.endStream(streamId);
+                  navigate("/");
+                } catch (e) {
+                  setIsEnding(false);
+                }
+              }
             } else {
               setVoiceCheckError(err.message || "语音检测异常");
             }
+            // 失败时保留 init + 最近帧，下次重试（不能只留最后一帧，否则无 init 段格式无效）
+            voiceChunksRef.current = chunks.length > 0
+              ? (chunks.length >= 2 ? [chunks[0], ...chunks.slice(-2)] : chunks)
+              : [];
+          } finally {
+            voiceCheckingRef.current = false;
           }
         };
         recorder.start(VOICE_CHUNK_MS);
@@ -215,6 +296,8 @@ const StreamerPage = () => {
 
     startVoiceCheck();
     return () => {
+      voiceCheckActiveRef.current = false;
+      voiceAbortRef.current?.abort(); // 取消进行中的请求，避免 pending 堆积
       if (recorder?.state !== "inactive") recorder?.stop();
       voiceRecorderRef.current = null;
       audioStream?.getTracks?.().forEach((t) => t.stop());
@@ -234,8 +317,8 @@ const StreamerPage = () => {
     }
   };
 
-  const handleSensitiveConfirm = async () => {
-    setSensitivePopup({ show: false, matchedWords: [], segment: "" });
+  const handleLevel1Confirm = async () => {
+    setLevel1Popup({ show: false, matchedWords: [], segment: "" });
     setIsEnding(true);
     try {
       await liveAPI.endStream(streamId);
@@ -299,41 +382,57 @@ const StreamerPage = () => {
         )}
       </div>
 
-      {sensitivePopup.show && (
-        <div
-          className="sensitive-popup-overlay"
-          onClick={() => setSensitivePopup({ show: false, matchedWords: [], segment: "" })}
-        >
-          <div
-            className="sensitive-popup"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sensitive-popup-title">最新检测到敏感词</div>
-            <p className="sensitive-popup-desc">
-              您刚才的发言中包含敏感词，点击下方按钮将结束直播并返回。
+      {/* 一级违禁词：全屏半透明黑色背景红色强警告弹窗，不可关闭，需点击按钮 */}
+      {level1Popup.show && (
+        <div className="sensitive-level1-overlay">
+          <div className="sensitive-level1-popup">
+            <div className="sensitive-level1-title">严重违规警告</div>
+            <p className="sensitive-level1-desc">
+              您的直播内容检测到一级违禁词，请立即停止违规内容。
             </p>
-            {sensitivePopup.segment && (
-              <p className="sensitive-popup-segment">
-                本次检测内容：{sensitivePopup.segment}
+            {level1Popup.segment && (
+              <p className="sensitive-level1-segment">
+                本次检测内容：{level1Popup.segment}
               </p>
             )}
-            <div className="sensitive-popup-words">
-              <span>最新命中：</span>
-              {sensitivePopup.matchedWords.map((w) => (
-                <span key={w} className="sensitive-word-tag">
+            <div className="sensitive-level1-words">
+              <span>命中违禁词：</span>
+              {level1Popup.matchedWords.map((w) => (
+                <span key={w} className="sensitive-level1-word-tag">
                   {w}
                 </span>
               ))}
             </div>
             <button
               type="button"
-              className="sensitive-popup-btn"
-              onClick={handleSensitiveConfirm}
+              className="sensitive-level1-btn"
+              onClick={handleLevel1Confirm}
               disabled={isEnding}
             >
-              {isEnding ? "结束中..." : "知道了"}
+              {isEnding ? "结束中..." : "我立即停止违规内容"}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* 二级违规词：顶部橙色固定浮动条，5秒消失 */}
+      {level2Toast && (
+        <div className="sensitive-level2-bar">
+          您的直播内容可能包含违规信息，请规范发言
+        </div>
+      )}
+
+      {/* 三级违规词：右下角黄色固定浮动通知，3秒消失 */}
+      {level3Toast && (
+        <div className="sensitive-level3-toast">
+          直播音频中检测到不文明用语，请规范发言
+        </div>
+      )}
+
+      {/* 四级预警词：右下角蓝色固定浮动通知，2秒消失 */}
+      {level4Toast && (
+        <div className="sensitive-level4-toast">
+          直播音频中检测到高风险内容，请谨慎发言
         </div>
       )}
     </div>

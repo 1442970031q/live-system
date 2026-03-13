@@ -139,7 +139,14 @@ curl -X POST http://localhost:3001/api/voice/check-text \
 
 ### 2. 文本含敏感词
 
-先往 `sensitive_word` 插入测试词（如 category_id=1 对应一级）：
+先插入测试词。**推荐**使用种子脚本（论文示例数据，贴合直播监管要求）：
+
+```bash
+cd server
+npm run seed:sensitive
+```
+
+或手动往 `sensitive_word` 插入（如 category_id=1 对应一级）：
 
 ```sql
 INSERT INTO sensitive_word (category_id, word) VALUES (1, '违禁');

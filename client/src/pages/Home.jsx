@@ -39,12 +39,30 @@ const Home = () => {
   
   return (
     <div className="home-container">
-      <h1>正在直播</h1>
+      {/* Hero 区域 */}
+      <div className="home-hero">
+        <h2 className="home-hero-title">发现精彩直播</h2>
+        <p className="home-hero-desc">与主播实时互动，分享精彩瞬间</p>
+        <div className="home-quick-links">
+          <Link to="/create" className="home-quick-link">📺 开播</Link>
+          <Link to="/follows" className="home-quick-link">❤️ 我的关注</Link>
+        </div>
+      </div>
+
+      {/* 直播列表 */}
+      <div className="home-section-title">
+        <h1>正在直播</h1>
+        <span className="home-section-badge">
+          {streams.length > 0 ? `${streams.length} 个直播间` : '暂无直播'}
+        </span>
+      </div>
       
       {streams.length === 0 ? (
         <div className="no-streams">
+          <div className="no-streams-icon">📡</div>
           <p>当前没有正在进行的直播</p>
-          <Link to="/create" className="create-stream-btn">创建直播</Link>
+          <p>快来成为第一个开播的主播吧～</p>
+          <Link to="/create" className="create-stream-btn">✨ 立即开播</Link>
         </div>
       ) : (
         <div className="streams-grid">

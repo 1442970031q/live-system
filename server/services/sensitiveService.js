@@ -35,6 +35,9 @@ async function initPool() {
   const words = await loadWords();
   await pool.init(words);
   console.log('[SensitiveService] Worker pool initialized with', words.length, 'words');
+  if (words.length === 0) {
+    console.warn('[SensitiveService] 词库为空！请运行: cd server && npm run seed:sensitive');
+  }
 }
 
 /**

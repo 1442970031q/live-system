@@ -135,21 +135,41 @@ export const voiceAPI = {
     }
     return response.json();
   },
-  /** 上传音频进行语音转文字 + 敏感词检测，用于直播时主播说话检测。blob 为录音片段（如 webm）。 */
-  checkAudio: async (blob) => {
+  /** 上传音频进行语音转文字 + 敏感词检测。blob 为录音片段。支持 signal 取消与超时。 */
+  checkAudio: async (blob, options = {}) => {
+    const { signal, timeoutMs = 25000 } = options;
     const form = new FormData();
     form.append("audio", blob, "chunk.webm");
-    const response = await fetch(`${API_URL}/voice/check`, {
-      method: "POST",
-      body: form,
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      const e = new Error(err.error || "语音检测失败");
-      if (err.matchedWords) e.matchedWords = err.matchedWords;
+    const ctrl = new AbortController();
+    const timeoutId = timeoutMs > 0 ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+    if (signal?.aborted) {
+      if (timeoutId) clearTimeout(timeoutId);
+      throw new DOMException("Aborted", "AbortError");
+    }
+    if (signal) {
+      signal.addEventListener("abort", () => {
+        ctrl.abort();
+        if (timeoutId) clearTimeout(timeoutId);
+      });
+    }
+    try {
+      const response = await fetch(`${API_URL}/voice/check`, {
+        method: "POST",
+        body: form,
+        signal: ctrl.signal,
+      });
+      if (timeoutId) clearTimeout(timeoutId);
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        const e = new Error(err.error || "语音检测失败");
+        if (err.matchedWords) e.matchedWords = err.matchedWords;
+        throw e;
+      }
+      return response.json();
+    } catch (e) {
+      if (timeoutId) clearTimeout(timeoutId);
       throw e;
     }
-    return response.json();
   },
 };
 

@@ -264,19 +264,19 @@ const FlvPlayer = ({
       />
 
 
-      {/* 自定义控制栏 */}
+      {/* 自定义控制栏 - 主流直播风格 */}
       <div
         style={{
           position: "absolute",
           bottom: 0,
           left: 0,
           right: 0,
-          padding: "10px",
-          backgroundColor: "rgba(0,0,0,0.6)",
+          padding: "8px 12px",
+          background: "linear-gradient(transparent, rgba(0,0,0,0.75))",
           color: "#fff",
           display: "flex",
           alignItems: "center",
-          gap: "15px",
+          gap: "12px",
         }}
       >
         {/* 播放/暂停按钮 */}
@@ -357,22 +357,23 @@ const FlvPlayer = ({
 
         {/* 直播状态标签 */}
         <span style={{
-          fontSize: "12px",
-          padding: "2px 6px",
-          backgroundColor: "#e53935",
-          borderRadius: "3px",
-          marginLeft: "5px",
+          fontSize: "11px",
+          padding: "3px 8px",
+          backgroundColor: "rgba(255, 59, 48, 0.9)",
+          borderRadius: "4px",
+          marginLeft: "4px",
+          fontWeight: 600,
         }}>
-          直播中
+          直播
         </span>
 
         {/* 低延迟模式标签 */}
         {lowLatency && (
           <span style={{
-            fontSize: "11px",
-            padding: "1px 4px",
-            backgroundColor: "#1976d2",
-            borderRadius: "2px",
+            fontSize: "10px",
+            padding: "2px 6px",
+            backgroundColor: "rgba(0, 122, 255, 0.8)",
+            borderRadius: "4px",
           }}>
             低延迟
           </span>

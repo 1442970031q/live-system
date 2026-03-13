@@ -24,3 +24,4 @@ admin/node_modules/
 speechToText/venv/
 speechToText/__pycache__/
 *.pyc
+client/build/

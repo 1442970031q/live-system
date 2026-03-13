@@ -21,9 +21,8 @@ const WatchStream = () => {
   const [sending, setSending] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isLoadingFollow, setIsLoadingFollow] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [sensitivePopup, setSensitivePopup] = useState({ show: false, matchedWords: [] });
-  const commentsEndRef = useRef(null);
+  const chatMessagesRef = useRef(null);
   const socketRef = useRef(null);
   // 当前用户
   const currentUser = authAPI.getCurrentUser();
@@ -90,9 +89,10 @@ const WatchStream = () => {
     };
   }, [streamId]);
 
-  // 自动滚动到最新弹幕
+  // 自动滚动到最新弹幕（仅滚动弹幕容器，避免整页滑到底部）
   useEffect(() => {
-    commentsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = chatMessagesRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [comments]);
 
   // 检查是否关注了主播
@@ -193,95 +193,114 @@ const WatchStream = () => {
 
   return (
     <div className="watch-stream-container">
-      <div className="stream-player">
-        {/* 视频播放器 */}
-        <div className="video-container">
-          {stream.liveUrl ? (
-            <PlayLiveVideo url={stream.liveUrl} width="100%" height="100%" />
-          ) : (
-            <img
-              src={`https://picsum.photos/1280/720?random=${streamId}`}
-              alt={stream.title}
-              className="stream-placeholder"
-            />
-          )}
+      <div className="watch-main">
+        {/* 视频播放器区域 */}
+        <div className="video-wrapper">
+          <div className="video-container">
+            {stream.liveUrl ? (
+              <PlayLiveVideo url={stream.liveUrl} width="100%" height="100%" />
+            ) : (
+              <img
+                src={`https://picsum.photos/1280/720?random=${streamId}`}
+                alt={stream.title}
+                className="stream-placeholder"
+              />
+            )}
 
-          <div className="live-indicator">直播中</div>
+            {/* 视频上方悬浮信息 */}
+            <div className="video-overlay-top">
+              <span className="live-badge">
+                <span className="live-dot" />
+                直播中
+              </span>
+            </div>
+          </div>
+
+          {/* 直播信息栏（视频下方） */}
+          <div className="stream-info-bar">
+            <div className="stream-info-left">
+              <img
+                src={stream.avatar || "https://picsum.photos/64/64?random=3"}
+                alt={stream.username}
+                className="streamer-avatar"
+              />
+              <div className="stream-info-text">
+                <h1 className="stream-title">{stream.title}</h1>
+                <div className="streamer-name">{stream.username}</div>
+              </div>
+              {currentUser && currentUser.id !== stream.user_id && (
+                <button
+                  className={`follow-btn ${isFollowing ? "following" : ""}`}
+                  onClick={handleFollowToggle}
+                  disabled={isLoadingFollow}
+                >
+                  {isLoadingFollow ? "..." : isFollowing ? "已关注" : "+ 关注"}
+                </button>
+              )}
+            </div>
+            {stream.description && (
+              <div className="stream-description">
+                <p>{stream.description}</p>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="stream-details">
-          <h1 className="stream-title">{stream.title}</h1>
+        {/* 右侧弹幕区 */}
+        <aside className="chat-sidebar">
+          <div className="chat-header">
+            <span className="chat-title">弹幕</span>
+            <span className="chat-count">{comments.length}</span>
+          </div>
 
-          <div className="stream-author">
-            <img
-              src={stream.avatar || "https://picsum.photos/64/64?random=3"}
-              alt={stream.username}
-              className="author-avatar"
-            />
-            <div className="author-info">
-              <span className="author-name">{stream.username}</span>
-            </div>
-
-            {currentUser && currentUser.id !== stream.user_id && (
-              <button
-                className={`follow-btn ${isFollowing ? "following" : ""}`}
-                onClick={handleFollowToggle}
-                disabled={isLoadingFollow}
-              >
-                {isLoadingFollow ? "处理中..." : isFollowing ? "取消" : "关注"}
-              </button>
+          <div ref={chatMessagesRef} className="chat-messages">
+            {comments.length === 0 ? (
+              <div className="no-comments">
+                <p>还没有弹幕</p>
+                <p className="no-comments-hint">发送第一条弹幕吧～</p>
+              </div>
+            ) : (
+              comments.map((comment) => (
+                <div key={comment.id} className="chat-message">
+                  <img
+                    src={`https://picsum.photos/32/32?random=${comment.user_id || comment.id}`}
+                    alt=""
+                    className="chat-avatar"
+                  />
+                  <div className="chat-content">
+                    <span className="chat-username">{comment.username}</span>
+                    <span className="chat-text">{comment.content}</span>
+                  </div>
+                </div>
+              ))
             )}
           </div>
 
-          <div className="stream-description">
-            <p>{stream.description}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="comments-section">
-        <h2>弹幕区</h2>
-
-        <div className="comments-container">
-          {comments.length === 0 ? (
-            <div className="no-comments">还没有弹幕，发送第一条弹幕吧！</div>
+          {currentUser ? (
+            <form onSubmit={handleSendComment} className="chat-input-wrap">
+              <input
+                type="text"
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="说点什么..."
+                className="chat-input"
+                disabled={sending}
+              />
+              <button
+                type="submit"
+                className="chat-send-btn"
+                disabled={sending || !newComment.trim()}
+              >
+                发送
+              </button>
+            </form>
           ) : (
-            comments.map((comment) => (
-              <div key={comment.id} className="comment">
-                <div className="comment-username">{comment.username}</div>
-                <div className="comment-content">{comment.content}</div>
-              </div>
-            ))
+            <div className="chat-login-prompt">
+              <Link to="/login" className="chat-login-link">登录</Link>
+              <span>后可以发送弹幕</span>
+            </div>
           )}
-          <div ref={commentsEndRef} />
-        </div>
-
-        {currentUser ? (
-          <form onSubmit={handleSendComment} className="comment-form">
-            <input
-              type="text"
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="发送弹幕..."
-              className="comment-input"
-              disabled={sending}
-            />
-            <button
-              type="submit"
-              className="send-comment-btn"
-              disabled={sending || !newComment.trim()}
-            >
-              发送
-            </button>
-          </form>
-        ) : (
-          <div className="login-prompt">
-            <Link to="/login" className="login-link">
-              登录
-            </Link>{" "}
-            后可以发送弹幕
-          </div>
-        )}
+        </aside>
       </div>
 
       {/* 违禁词检测弹窗 */}
