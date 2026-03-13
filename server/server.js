@@ -15,6 +15,8 @@ const liveRoutes = require("./routes/live");
 const commentRoutes = require("./routes/comment");
 const userRoutes = require("./routes/user");
 const voiceRoutes = require("./routes/voice");
+const sensitiveRoutes = require("./routes/sensitive");
+const sensitiveService = require("./services/sensitiveService");
 
 const app = express();
 const server = http.createServer(app);
@@ -60,10 +62,12 @@ app.use("/api/live", liveRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/voice", voiceRoutes);
+app.use("/api/sensitive", sensitiveRoutes);
 
 async function startServer() {
   try {
     await db.initDB();
+    await sensitiveService.initPool();
     initMediaServer();
     const host = config.host === "0.0.0.0" ? getIPAddress() : config.host;
     server.listen(config.port, config.host, () => {

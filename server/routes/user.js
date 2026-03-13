@@ -3,6 +3,20 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
+const { sensitiveCheck } = require('../middleware/sensitiveCheck');
+
+// 更新用户简介（需敏感词检测）
+router.put('/profile', authenticateToken, sensitiveCheck({ field: 'bio', scene: 'bio' }), async (req, res) => {
+  try {
+    const { bio } = req.body;
+    const userId = req.user.id;
+    await db.query('UPDATE users SET bio = ? WHERE id = ?', [bio || null, userId]);
+    res.json({ message: '更新成功' });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ message: 'Failed to update profile' });
+  }
+});
 
 // 关注用户
 router.post('/follow/:userId', authenticateToken, async (req, res) => {

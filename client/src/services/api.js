@@ -242,6 +242,23 @@ export const userAPI = {
     return response.json();
   },
   
+  updateProfile: async (data) => {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_URL}/users/profile`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to update profile');
+    }
+    return response.json();
+  },
+
   getUser: async (userId) => {
     const response = await fetch(`${API_URL}/users/${userId}`);
     

@@ -1,11 +1,11 @@
 /**
- * 语音敏感词感知：上传音频 -> Python 转文字 -> 敏感词检测
+ * 语音敏感词感知：上传音频 -> Python 转文字 -> DFA 工作线程池敏感词检测
  */
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const { transcribe } = require("../services/speechService");
-const { checkSensitive } = require("../sensitiveWords");
+const sensitiveService = require("../services/sensitiveService");
 const config = require("../config");
 
 const upload = multer({
@@ -52,12 +52,32 @@ router.post("/check", uploadAudio, async (req, res) => {
 
     const contentType = file.mimetype || "application/octet-stream";
     const text = await transcribe(file.buffer, contentType);
-    const { containsSensitive, matchedWords } = checkSensitive(text);
+    const result = await sensitiveService.check(text);
+    const { hit, highestLevel, matchedWords } = result;
+    const handleStrategy = sensitiveService.getHandleStrategy(highestLevel);
+
+    // 可选：命中一级违禁词时记录日志（无 userId/streamId 时仅检测不写库）
+    let hitLogId = null;
+    if (hit && matchedWords[0]) {
+      hitLogId = await sensitiveService.logHit({
+        userId: null,
+        streamId: null,
+        sensitiveWordId: matchedWords[0].wordId || 0,
+        originalContent: text,
+        matchedWord: matchedWords[0].word,
+        hitLevel: highestLevel,
+        hitScene: "voice",
+        handleResult: handleStrategy,
+      });
+    }
 
     res.json({
       text,
-      containsSensitive,
-      matchedWords,
+      containsSensitive: hit,
+      matchedWords: matchedWords.map((m) => m.word),
+      highestLevel: hit ? highestLevel : 0,
+      handleStrategy: hit ? handleStrategy : null,
+      hitLogId: hitLogId || undefined,
     });
   } catch (err) {
     console.error("Voice check error:", err);
@@ -70,14 +90,21 @@ router.post("/check", uploadAudio, async (req, res) => {
 
 /**
  * POST /api/voice/check-text
- * 仅对文本做敏感词检测（不经过语音识别）
+ * 仅对文本做敏感词检测（不经过语音识别），使用 DFA 工作线程池
  * Body: { text: "..." }
  */
-router.post("/check-text", (req, res) => {
+router.post("/check-text", async (req, res) => {
   try {
     const text = req.body?.text != null ? String(req.body.text) : "";
-    const { containsSensitive, matchedWords } = checkSensitive(text);
-    res.json({ text, containsSensitive, matchedWords });
+    const result = await sensitiveService.check(text);
+    const { hit, highestLevel, matchedWords } = result;
+    res.json({
+      text,
+      containsSensitive: hit,
+      matchedWords: matchedWords.map((m) => m.word),
+      highestLevel: hit ? highestLevel : 0,
+      handleStrategy: hit ? sensitiveService.getHandleStrategy(highestLevel) : null,
+    });
   } catch (err) {
     console.error("Check text error:", err);
     res.status(500).json({ error: err.message || "检测失败" });

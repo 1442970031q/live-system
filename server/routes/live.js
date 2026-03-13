@@ -3,11 +3,12 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 const { authenticateToken } = require("../middleware/auth");
+const { sensitiveCheck } = require("../middleware/sensitiveCheck");
 const { getIPAddress } = require("../tools");
 const IP = getIPAddress();
 
-// 创建直播
-router.post("/create", authenticateToken, async (req, res) => {
+// 创建直播（标题、描述需经敏感词检测）
+router.post("/create", authenticateToken, sensitiveCheck({ field: "title", scene: "title" }), sensitiveCheck({ field: "description", scene: "title" }), async (req, res) => {
   try {
     const { title, description } = req.body;
     const userId = req.user.id;

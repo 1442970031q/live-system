@@ -40,6 +40,8 @@ async function createTables() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  // 若表已存在，补充 bio 列（敏感词检测场景）
+  await pool.execute('ALTER TABLE users ADD COLUMN bio TEXT').catch(() => {});
   
   // 直播表
   await pool.execute(`
@@ -80,6 +82,81 @@ async function createTables() {
       FOREIGN KEY (follow_id) REFERENCES users(id),
       UNIQUE KEY unique_follow (user_id, follow_id)
     )
+  `);
+
+  // 敏感词合规管控相关表
+  await createSensitiveTables();
+}
+
+/**
+ * 创建敏感词合规管控相关表（论文级功能扩展）
+ */
+async function createSensitiveTables() {
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS sensitive_category (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      level TINYINT NOT NULL UNIQUE,
+      name VARCHAR(50) NOT NULL,
+      description VARCHAR(255) DEFAULT NULL,
+      handle_strategy VARCHAR(100) DEFAULT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_level (level)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS sensitive_word (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      category_id INT NOT NULL,
+      word VARCHAR(100) NOT NULL,
+      hit_count INT DEFAULT 0,
+      enabled TINYINT(1) DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (category_id) REFERENCES sensitive_category(id) ON DELETE CASCADE,
+      INDEX idx_category_enabled (category_id, enabled),
+      INDEX idx_word (word(20))
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS sensitive_hit_log (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT DEFAULT NULL,
+      stream_id INT DEFAULT NULL,
+      sensitive_word_id INT NOT NULL,
+      original_content TEXT NOT NULL,
+      matched_word VARCHAR(100) NOT NULL,
+      hit_level TINYINT NOT NULL,
+      hit_scene VARCHAR(50) NOT NULL,
+      handle_result VARCHAR(50) DEFAULT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (sensitive_word_id) REFERENCES sensitive_word(id) ON DELETE CASCADE,
+      INDEX idx_user_stream (user_id, stream_id),
+      INDEX idx_stream_created (stream_id, created_at),
+      INDEX idx_level_created (hit_level, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS user_black_white_list (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      list_type ENUM('black', 'white') NOT NULL,
+      reason VARCHAR(255) DEFAULT NULL,
+      expire_at TIMESTAMP NULL DEFAULT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE KEY unique_user_type (user_id, list_type),
+      INDEX idx_type_expire (list_type, expire_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  // 初始化默认分类
+  await pool.execute(`
+    INSERT IGNORE INTO sensitive_category (level, name, description, handle_strategy) VALUES
+    (1, '一级违禁词', '严重违禁，直接拦截', 'reject'),
+    (2, '二级违规词', '违规内容，拒绝并记录', 'reject'),
+    (3, '三级违规词', '轻度违规，替换或警告', 'replace'),
+    (4, '四级预警词', '预警监控，仅记录', 'log')
   `);
 }
 
