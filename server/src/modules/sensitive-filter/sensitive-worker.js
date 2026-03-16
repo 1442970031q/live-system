@@ -7,32 +7,7 @@
  * - { type: 'match', id, text } 执行匹配，回复 { id, result }
  */
 const { parentPort } = require('worker_threads');
-
-// 使用与 DFAFilter 相同的实现（worker 内独立加载）
-const FULL_TO_HALF = {
-  '０': '0', '１': '1', '２': '2', '３': '3', '４': '4',
-  '５': '5', '６': '6', '７': '7', '８': '8', '９': '9',
-  'Ａ': 'A', 'Ｂ': 'B', 'Ｃ': 'C', 'Ｄ': 'D', 'Ｅ': 'E',
-  'Ｆ': 'F', 'Ｇ': 'G', 'Ｈ': 'H', 'Ｉ': 'I', 'Ｊ': 'J',
-  'Ｋ': 'K', 'Ｌ': 'L', 'Ｍ': 'M', 'Ｎ': 'N', 'Ｏ': 'O',
-  'Ｐ': 'P', 'Ｑ': 'Q', 'Ｒ': 'R', 'Ｓ': 'S', 'Ｔ': 'T',
-  'Ｕ': 'U', 'Ｖ': 'V', 'Ｗ': 'W', 'Ｘ': 'X', 'Ｙ': 'Y', 'Ｚ': 'Z',
-  'ａ': 'a', 'ｂ': 'b', 'ｃ': 'c', 'ｄ': 'd', 'ｅ': 'e',
-  'ｆ': 'f', 'ｇ': 'g', 'ｈ': 'h', 'ｉ': 'i', 'ｊ': 'j',
-  'ｋ': 'k', 'ｌ': 'l', 'ｍ': 'm', 'ｎ': 'n', 'ｏ': 'o',
-  'ｐ': 'p', 'ｑ': 'q', 'ｒ': 'r', 'ｓ': 's', 'ｔ': 't',
-  'ｕ': 'u', 'ｖ': 'v', 'ｗ': 'w', 'ｘ': 'x', 'ｙ': 'y', 'ｚ': 'z',
-  '　': ' ',
-};
-
-function normalize(text) {
-  if (!text || typeof text !== 'string') return '';
-  let s = text.trim();
-  s = s.split('').map((c) => FULL_TO_HALF[c] || c).join('');
-  s = s.toLowerCase();
-  s = s.replace(/\s+/g, '');
-  return s;
-}
+const { normalize } = require('./normalize');
 
 function addWord(tree, level, word, wordId) {
   const w = normalize(word);
