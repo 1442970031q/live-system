@@ -1,4 +1,4 @@
-const IP = '192.168.1.26:3001'
+const IP = '192.168.1.35:3001'
 // API服务
 const API_URL = `http://${IP}/api`;
 // websocket 
@@ -137,7 +137,8 @@ export const voiceAPI = {
   },
   /** 上传音频进行语音转文字 + 敏感词检测。blob 为录音片段。支持 signal 取消与超时。streamId 主播直播间ID，用于一级命中时加入黑名单。 */
   checkAudio: async (blob, options = {}) => {
-    const { signal, timeoutMs = 25000, streamId } = options;
+    // 与后端 speech 超时（默认 120s）及 base 模型整段推理对齐，避免误杀长转写
+    const { signal, timeoutMs = 90000, streamId } = options;
     const form = new FormData();
     form.append("audio", blob, "chunk.webm");
     if (streamId != null) form.append("streamId", String(streamId));

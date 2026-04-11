@@ -11,7 +11,7 @@ const sensitiveService = require("../services/sensitiveService");
 const config = require("../config");
 
 const MAX_CONCURRENT_VOICE = 3;
-const VOICE_REQUEST_TIMEOUT_MS = 28000;
+const VOICE_REQUEST_TIMEOUT_MS = 45000;
 let voiceConcurrent = 0;
 
 const upload = multer({
@@ -79,30 +79,23 @@ router.post("/check", uploadAudio, async (req, res) => {
     }
 
     const contentType = file.mimetype || "application/octet-stream";
-    // 常用敏感词作为 base，帮助 Whisper 正确识别同音字；DB 词库合并后去重
-    const COMMON_SENSITIVE_WORDS = [
-      "赌博", "色情", "加微信", "保健品", "违规", "私下交易", "废物", "垃圾",
-      "赌博平台", "色情服务", "百分百赚钱", "刷礼物返现", "白痴",
-    ];
-    let prompt;
-    try {
-      const words = await sensitiveService.loadWords();
-      const dbWords = words.map((w) => w.word);
-      const allWords = [...new Set([...COMMON_SENSITIVE_WORDS, ...dbWords])];
-      prompt = allWords.join(" ");
-    } catch (e) {
-      console.warn("[Voice] loadWords failed, using common sensitive words:", e?.message);
-      prompt = COMMON_SENSITIVE_WORDS.join(" ");
-    }
-    const text = await transcribe(file.buffer, contentType, { prompt });
+    // 不再注入内置敏感词 prompt，只走语音识别原始文本 + 数据库词库检测
+    const text = await transcribe(file.buffer, contentType);
     clearTimeout(timeoutId);
     if (res.headersSent) {
       voiceConcurrent = Math.max(0, voiceConcurrent - 1);
       return;
     }
     const result = await sensitiveService.check(text);
-    const { hit, highestLevel, matchedWords } = result;
-    const handleStrategy = sensitiveService.getHandleStrategy(highestLevel);
+    // 严格要求词条带有数据库主键（wordId），确保只命中数据库中的敏感词
+    const matchedWords = (result.matchedWords || []).filter(
+      (m) => m?.word && m.wordId != null
+    );
+    const hit = matchedWords.length > 0;
+    const highestLevel = hit
+      ? matchedWords.reduce((max, m) => Math.max(max, Number(m.level) || 0), 0)
+      : 0;
+    const handleStrategy = hit ? sensitiveService.getHandleStrategy(highestLevel) : null;
 
     // 获取主播 userId：从 streamId 查 live_streams（主播语音检测场景）
     let streamerUserId = null;
@@ -142,7 +135,7 @@ router.post("/check", uploadAudio, async (req, res) => {
       containsSensitive: hit,
       matchedWords: matchedWords.map((m) => m.word),
       highestLevel: hit ? highestLevel : 0,
-      handleStrategy: hit ? handleStrategy : null,
+      handleStrategy,
       hitLogId: hitLogId || undefined,
     });
   } catch (err) {

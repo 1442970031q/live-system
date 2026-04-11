@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-语音转文字微服务：使用 faster-whisper 模型识别（默认 small 平衡精度与速度）。
+语音转文字微服务：使用 faster-whisper 模型识别（默认 small，优先准确率）。
 接口：POST /transcribe，请求体为音频文件（multipart/form-data 或 raw binary）。
 WebM/Opus 等格式统一经 FFmpeg 转为 PCM；支持音频预处理（降噪、归一化）与智能分段转写。
 """
@@ -12,11 +12,11 @@ import traceback
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-# 环境变量控制（默认：3 秒切片 + 1 秒重叠；关预处理、small、beam=1）
+# 环境变量控制（默认：8 秒切片 + 0.6 秒重叠；关预处理、small、beam=3）
 ENABLE_PREPROCESS = os.environ.get("ENABLE_PREPROCESS", "0") == "1"
 ENABLE_SEGMENT = os.environ.get("ENABLE_SEGMENT", "1") == "1"
-SEGMENT_LENGTH_SEC = float(os.environ.get("SEGMENT_LENGTH_SEC", "3"))
-SEGMENT_OVERLAP_SEC = float(os.environ.get("SEGMENT_OVERLAP_SEC", "1"))
+SEGMENT_LENGTH_SEC = float(os.environ.get("SEGMENT_LENGTH_SEC", "8"))
+SEGMENT_OVERLAP_SEC = float(os.environ.get("SEGMENT_OVERLAP_SEC", "0.6"))
 
 # 延迟加载模型，避免启动时卡住
 _model = None
@@ -24,16 +24,16 @@ _model = None
 # 统一用 FFmpeg 解码的格式（浏览器 webm/opus 等 PyAV 易报错）
 FFMPEG_SUFFIXES = (".webm", ".opus", ".ogg", ".mp3", ".m4a")
 
-# 直播场景常用敏感词：帮助 Whisper 正确识别同音字（赌→堵、博→搏 等）
-# 注意：prompt 过长易被混入输出，尽量简短、仅列关键词
-INITIAL_PROMPT = "赌博 色情 加微信 保健品 违规 私下交易 废物 垃圾 赌博平台 色情服务 百分百赚钱 刷礼物返现 白痴"
+# 基础提示词尽量短：过长 prompt 会显著降低识别准确率并诱发“复读 prompt”幻觉
+BASE_PROMPT = os.environ.get("WHISPER_BASE_PROMPT", "以下是中文直播语音，请只输出听到的内容。")
+MAX_PROMPT_CHARS = int(os.environ.get("WHISPER_MAX_PROMPT_CHARS", "180"))
 
 def get_model():
     global _model
     if _model is None:
         from faster_whisper import WhisperModel
         device = os.environ.get("WHISPER_DEVICE", "cpu")
-        # small 默认：速度快；medium 更准但更慢
+        # 默认 small：比 base 更稳，尤其在嘈杂环境/口语场景
         model_name = os.environ.get("WHISPER_MODEL", "small")
         compute_type = "float16" if device == "cuda" else "int8"
         _model = WhisperModel(model_name, device=device, compute_type=compute_type)
@@ -42,19 +42,27 @@ def get_model():
 
 def _transcribe_kwargs(initial_prompt=None):
     """统一的转写参数：束搜索、强制中文、禁用时间戳"""
-    beam_size = int(os.environ.get("WHISPER_BEAM_SIZE", "1"))
+    beam_size = int(os.environ.get("WHISPER_BEAM_SIZE", "3"))
+    no_speech_threshold = float(os.environ.get("WHISPER_NO_SPEECH_THRESHOLD", "0.45"))
     return {
         "language": "zh",
-        "beam_size": max(1, min(5, beam_size)),
+        "beam_size": max(1, min(8, beam_size)),
         "patience": float(os.environ.get("WHISPER_PATIENCE", "1.0")),
         "temperature": 0.0,
         "word_timestamps": False,
         "vad_filter": True,
-        "initial_prompt": initial_prompt or INITIAL_PROMPT,
+        "vad_parameters": {
+            "min_silence_duration_ms": int(os.environ.get("WHISPER_VAD_MIN_SIL_MS", "500")),
+            "speech_pad_ms": int(os.environ.get("WHISPER_VAD_SPEECH_PAD_MS", "200")),
+        },
+        "initial_prompt": initial_prompt or BASE_PROMPT,
         "condition_on_previous_text": False,
         "repetition_penalty": float(os.environ.get("WHISPER_REPETITION_PENALTY", "1.2")),
-        "no_speech_threshold": float(os.environ.get("WHISPER_NO_SPEECH_THRESHOLD", "0.3")),
+        "no_speech_threshold": max(0.1, min(0.95, no_speech_threshold)),
+        "log_prob_threshold": float(os.environ.get("WHISPER_LOGPROB_THRESHOLD", "-1.0")),
+        "compression_ratio_threshold": float(os.environ.get("WHISPER_COMPRESSION_RATIO_THRESHOLD", "2.4")),
         "no_repeat_ngram_size": int(os.environ.get("WHISPER_NO_REPEAT_NGRAM", "0")),
+        "suppress_blank": True,
     }
 
 # WebM 至少约 32KB 才可能有完整 EBML 头，过小多为不完整片段
@@ -173,6 +181,20 @@ def _pcm_to_f32_and_preprocess(pcm_bytes, sr=16000):
     return audio_f32
 
 
+# 静音检测阈值：RMS 低于此值视为无人说话（典型人声 RMS 约 0.01~0.3）
+SILENCE_RMS_THRESHOLD = float(os.environ.get("SILENCE_RMS_THRESHOLD", "0.005"))
+
+
+def _is_silent(audio_f32, threshold=None):
+    """检测音频是否为静音/极低能量（无人说话）。"""
+    import numpy as np
+    if audio_f32 is None or audio_f32.size == 0:
+        return True
+    rms = float(np.sqrt(np.mean(audio_f32 ** 2)))
+    thr = threshold if threshold is not None else SILENCE_RMS_THRESHOLD
+    return rms < thr
+
+
 # Whisper 有时会把 prompt 片段混入输出，需后处理剔除
 PROMPT_LEAKAGE_PATTERNS = [
     "上一句结尾：", "一句结尾：", "上句结尾：",
@@ -191,26 +213,74 @@ def _strip_prompt_leakage(text):
     return result.strip()
 
 
+def _merge_text_with_overlap(prev_text, curr_text):
+    """合并重叠分段文本，避免重复短语（如“大家好大家好”）。"""
+    if not prev_text:
+        return curr_text or ""
+    if not curr_text:
+        return prev_text
+    max_overlap = min(len(prev_text), len(curr_text), 24)
+    for n in range(max_overlap, 0, -1):
+        if prev_text[-n:] == curr_text[:n]:
+            return prev_text + curr_text[n:]
+    return prev_text + curr_text
+
+
+def _build_prompt(base_prompt, prev_tail):
+    """构造短 prompt，严格限制长度，避免过长 prompt 拉低准确率。"""
+    base = (base_prompt or "").strip() or BASE_PROMPT
+    if len(base) > MAX_PROMPT_CHARS:
+        base = base[:MAX_PROMPT_CHARS]
+    if not prev_tail:
+        return base
+    # 仅带少量上下文，避免把上一段大段文本灌回模型
+    tail = prev_tail[-48:]
+    prompt = f"{base} 上一句结尾：{tail}"
+    return prompt[:MAX_PROMPT_CHARS]
+
+
+def _is_prompt_hallucination(text, prompt):
+    """
+    检测转写结果是否为 prompt 泄漏（幻觉）。
+    如果输出文本去除 prompt 中的词后几乎为空，说明 Whisper 只是在复述 prompt。
+    """
+    if not text or not prompt:
+        return False
+    prompt_words = set(prompt.strip().split())
+    remaining = text
+    for w in sorted(prompt_words, key=len, reverse=True):
+        remaining = remaining.replace(w, "")
+    remaining = remaining.replace(" ", "").strip()
+    if len(text.replace(" ", "")) == 0:
+        return True
+    ratio = len(remaining) / len(text.replace(" ", ""))
+    return ratio < 0.15
+
+
 def _transcribe_chunks(chunks, base_prompt=None):
     """对多个音频片段分别转写并合并结果。上一段结尾作为下一段 initial_prompt 提升连贯性。
-    base_prompt: 可选，由 Node 传入的敏感词等，覆盖默认 INITIAL_PROMPT"""
+    base_prompt: 可选，由 Node 传入的敏感词等，覆盖默认 BASE_PROMPT"""
     model = get_model()
-    texts = []
+    merged_text = ""
     prev_tail = ""
     ctx_len = int(os.environ.get("WHISPER_CONTEXT_CHARS", "60"))
-    default_prompt = (base_prompt or "").strip() or INITIAL_PROMPT
+    default_prompt = (base_prompt or "").strip() or BASE_PROMPT
+    if len(default_prompt) > MAX_PROMPT_CHARS:
+        default_prompt = default_prompt[:MAX_PROMPT_CHARS]
     for _start, _end, chunk in chunks:
-        prompt = default_prompt
-        if prev_tail:
-            # 仅用上一段结尾作上下文，避免「上一句结尾：」等被模型复述
-            prompt = f"{default_prompt} {prev_tail}"
-        segs, _ = model.transcribe(chunk, **_transcribe_kwargs(initial_prompt=prompt))
+        if _is_silent(chunk):
+            continue
+        prompt = _build_prompt(default_prompt, prev_tail)
+        segs, _info = model.transcribe(chunk, **_transcribe_kwargs(initial_prompt=prompt))
         t = "".join(s.text for s in segs).strip()
         t = _strip_prompt_leakage(t)
+        if t and _is_prompt_hallucination(t, default_prompt):
+            print(f"[Whisper] prompt hallucination detected, discarding: {t!r}")
+            continue
         if t:
-            texts.append(t)
+            merged_text = _merge_text_with_overlap(merged_text, t)
             prev_tail = t[-ctx_len:] if len(t) > ctx_len else t
-    return "".join(texts).strip()
+    return merged_text.strip()
 
 
 def transcribe_audio_bytes(audio_data, content_type_hint="", prompt_hint=None):
@@ -236,6 +306,9 @@ def transcribe_audio_bytes(audio_data, content_type_hint="", prompt_hint=None):
     audio_f32 = _pcm_to_f32_and_preprocess(pcm_bytes)
     if audio_f32.size < 16000:
         return None, "音频过短，请至少录制约 1 秒后重试"
+
+    if _is_silent(audio_f32):
+        return "", None
 
     try:
         chunks = segment_audio(audio_f32)

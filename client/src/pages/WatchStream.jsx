@@ -22,7 +22,9 @@ const WatchStream = () => {
   const [isFollowing, setIsFollowing] = useState(false);
   const [isLoadingFollow, setIsLoadingFollow] = useState(false);
   const [sensitivePopup, setSensitivePopup] = useState({ show: false, matchedWords: [] });
+  const [sensitiveToast, setSensitiveToast] = useState({ show: false, level: 0, matchedWords: [] });
   const chatMessagesRef = useRef(null);
+  const toastTimerRef = useRef(null);
   const socketRef = useRef(null);
   // 当前用户
   const currentUser = authAPI.getCurrentUser();
@@ -127,7 +129,16 @@ const WatchStream = () => {
     }
   };
 
-  // 发送弹幕（先做违禁词检测，命中则弹窗提示不发送）
+  const showSensitiveToast = (level, matchedWords) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setSensitiveToast({ show: true, level, matchedWords });
+    const duration = level <= 3 ? 3000 : 2000;
+    toastTimerRef.current = setTimeout(() => {
+      setSensitiveToast({ show: false, level: 0, matchedWords: [] });
+    }, duration);
+  };
+
+  // 发送弹幕（先做违禁词检测，一二级弹窗拦截，三四级轻提示后仍发送）
   const handleSendComment = async (e) => {
     e.preventDefault();
 
@@ -144,9 +155,13 @@ const WatchStream = () => {
     try {
       const check = await voiceAPI.checkText(newComment);
       if (check.containsSensitive && check.matchedWords?.length) {
-        setSensitivePopup({ show: true, matchedWords: check.matchedWords });
-        setSending(false);
-        return;
+        const level = check.highestLevel || 1;
+        if (level <= 2) {
+          setSensitivePopup({ show: true, matchedWords: check.matchedWords });
+          setSending(false);
+          return;
+        }
+        showSensitiveToast(level, check.matchedWords);
       }
 
       const comment = await commentAPI.sendComment(streamId, newComment);
@@ -303,7 +318,7 @@ const WatchStream = () => {
         </aside>
       </div>
 
-      {/* 违禁词检测弹窗 */}
+      {/* 一二级违禁词弹窗（阻止发送） */}
       {sensitivePopup.show && (
         <div className="sensitive-popup-overlay" onClick={() => setSensitivePopup({ show: false, matchedWords: [] })}>
           <div className="sensitive-popup" onClick={(e) => e.stopPropagation()}>
@@ -319,6 +334,20 @@ const WatchStream = () => {
               知道了
             </button>
           </div>
+        </div>
+      )}
+
+      {/* 三四级敏感词轻提示（不阻止发送） */}
+      {sensitiveToast.show && (
+        <div className={sensitiveToast.level <= 3 ? "sensitive-level3-toast" : "sensitive-level4-toast"}>
+          {sensitiveToast.level <= 3
+            ? "⚠ 弹幕含有敏感词，请注意用词规范"
+            : "ℹ 弹幕含有预警词，建议注意用词"}
+          {sensitiveToast.matchedWords?.length > 0 && (
+            <span style={{ marginLeft: 8, opacity: 0.85 }}>
+              （{sensitiveToast.matchedWords.join("、")}）
+            </span>
+          )}
         </div>
       )}
     </div>

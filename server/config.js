@@ -24,7 +24,7 @@ module.exports = {
   },
   // 语音敏感词感知：Python 识别微服务地址（未配置则语音检测接口返回 503）
   speechServiceUrl: process.env.SPEECH_SERVICE_URL || "http://localhost:5001",
-  speechServiceTimeout: Number(process.env.SPEECH_SERVICE_TIMEOUT) || 30000,
+  speechServiceTimeout: Number(process.env.SPEECH_SERVICE_TIMEOUT) || 50000,
   // 额外敏感词（可改为从文件/数据库加载）
   sensitiveWords: process.env.SENSITIVE_WORDS ? process.env.SENSITIVE_WORDS.split(",").map((s) => s.trim()) : [],
 };

@@ -229,7 +229,8 @@ const StreamerPage = () => {
           try {
             const result = await voiceAPI.checkAudio(blob, {
               signal: voiceAbortRef.current.signal,
-              timeoutMs: 25000,
+              // CPU 场景下转写偶发超过 25s，适当放宽避免前端频繁主动取消
+              timeoutMs: 60000,
               streamId,
             });
             if (!voiceCheckActiveRef.current) return; // 推出直播间后忽略检测结果

@@ -1,6 +1,6 @@
 # 语音转文字微服务（faster-whisper）
 
-用于「语音敏感词感知」的识别服务，将音频转为文字后由 Node 端做敏感词检测。默认偏速度（small + 贪心解码），可通过环境变量切换为高精度模式。
+用于「语音敏感词感知」的识别服务，将音频转为文字后由 Node 端做敏感词检测。当前默认配置优先准确率（`small + beam search`），可通过环境变量切换到更快模式。
 
 ## 第一步：安装 Python 环境（macOS）
 
@@ -59,14 +59,14 @@ python app.py
 
 先启动本 Python 服务，再启动 Node 服务。Node 会请求 `http://localhost:5001/transcribe` 做语音识别，并在本地做敏感词检测。
 
-## 速度模式（默认）
+## 默认模式（准确率优先）
 
-- **模型**：`small`，约 290MB，推理快
-- **贪心解码**：`beam_size=1`，单次解码，无束搜索开销
-- **无预处理**：`ENABLE_PREPROCESS=0`，跳过降噪
-- **无分段**：`ENABLE_SEGMENT=0`，整段一次转写，无多次调用
+- **模型**：`small`
+- **解码**：`beam_size=3`（比贪心更稳）
+- **分段**：`8 秒切片 + 0.6 秒重叠`（兼顾上下文与稳定性）
+- **短 prompt**：严格限制 prompt 长度，减少 prompt 幻觉和误识别
 
-## 高精度模式（可选）
+## 高精度模式（可选，进一步提升）
 
 需更高准确率时，可设置：
 
@@ -89,16 +89,19 @@ export ENABLE_SEGMENT=1
 # 模型：tiny | base | small（默认） | medium | large-v3
 export WHISPER_MODEL=small
 
-# 束搜索 1=贪心（快） 5=束搜索（准），默认 1
-export WHISPER_BEAM_SIZE=1
+# 束搜索 1=贪心（快） 3/5=束搜索（准），默认 3
+export WHISPER_BEAM_SIZE=3
 
-# 分段：3 秒固定切片 + 1 秒重叠
-export SEGMENT_LENGTH_SEC=3
-export SEGMENT_OVERLAP_SEC=1
+# 分段：默认 8 秒固定切片 + 0.6 秒重叠
+export SEGMENT_LENGTH_SEC=8
+export SEGMENT_OVERLAP_SEC=0.6
 
 # 预处理、分段：0=关（快） 1=开（准）
 export ENABLE_PREPROCESS=0
-export ENABLE_SEGMENT=0
+export ENABLE_SEGMENT=1
+
+# prompt 长度上限（默认 180，过长会拉低准确率）
+export WHISPER_MAX_PROMPT_CHARS=180
 
 # GPU 加速
 export WHISPER_DEVICE=cuda
